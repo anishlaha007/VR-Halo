@@ -5,86 +5,83 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#000">
-<title>Sound AR Display</title>
+<meta name="theme-color" content="#05050a">
+<title>Halo</title>
 <style>
-:root{--card:#151a22ee;--line:#262e3a;--fg:#e8ecf1;--mut:#8b95a3;--ok:#3ecf8e;--warn:#f5a524;--bad:#ff4d4f;--acc:#5b9dff}
+:root{--bg:#05050a;--ink:#f3f0ff;--mut:rgba(243,240,255,.6);--dim:rgba(243,240,255,.36);--line:rgba(243,240,255,.12);--glass:rgba(16,13,30,.5);--glass-hi:rgba(24,19,44,.8);--ok:#5df2c1;--bad:#ff5a7a;
+  --font:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;background:#000;color:var(--fg);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:var(--ink);font:15px/1.4 var(--font);user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+body:not(.running){background:radial-gradient(130% 90% at 50% 115%,#1a1233 0%,#0a0814 45%,var(--bg) 75%)}
 #cam,#world{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;display:none}
 body.mode-camera #cam{display:block}
 body.mode-preview #world{display:block}
-#hud{position:fixed;inset:0;background:transparent;touch-action:none}
+#hud{position:fixed;inset:0;touch-action:none}
 #gl{position:fixed;inset:0;pointer-events:none}
+/* the halo: every sound, drawn as a wave on the edge of the view (halo.js) */
+#halo{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 
-/* --- world-locked cards (camera + preview modes; AR draws them in 3D) --- */
-#cards{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.card{position:absolute;left:0;top:0;display:flex;align-items:center;gap:12px;padding:10px 18px 10px 10px;border-radius:22px;background:rgba(12,16,22,.84);border:2.5px solid var(--c);box-shadow:0 0 24px color-mix(in srgb,var(--c) 55%,transparent);white-space:nowrap;will-change:transform;transition:opacity .5s}
-.card .ic{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:30px;background:color-mix(in srgb,var(--c) 22%,transparent)}
-.card .t{font-weight:750;font-size:20px}
-.card .s{font-size:13px;color:#aab4c2}
-.card .in{display:flex;align-items:center;gap:12px;animation:pop .45s cubic-bezier(.3,1.6,.5,1) both}
-.card::after{content:"";position:absolute;inset:-3px;border-radius:24px;border:2.5px solid var(--c);animation:ping 1s ease-out 3;pointer-events:none}
-.card.fade{opacity:0}
-@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
-@keyframes ping{from{transform:scale(1);opacity:.9}to{transform:scale(1.35,1.9);opacity:0}}
-
-/* --- head-locked hints --- */
-#hints{position:absolute;inset:0;pointer-events:none}
-.hint{position:absolute;display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:99px;background:rgba(12,16,22,.84);border:2px solid var(--c);font-weight:700;font-size:15px;transition:top .25s,opacity .3s;animation:hintIn .3s ease-out}
-.hint .ar{font-size:22px;color:var(--c);line-height:1}
-.hint.left{left:calc(env(safe-area-inset-left) + 10px)}
-.hint.right{right:calc(env(safe-area-inset-right) + 10px);flex-direction:row-reverse}
-.hint.back{animation:hintIn .3s ease-out,throb 1s ease-in-out infinite}
-@keyframes hintIn{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:none}}
-@keyframes throb{50%{box-shadow:0 0 22px var(--c)}}
-#behindBar{position:absolute;left:0;right:0;bottom:0;height:110px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(to top,rgba(255,77,79,.55),transparent);opacity:0;transition:opacity .3s;pointer-events:none;font-weight:800;font-size:18px;letter-spacing:.4px;text-shadow:0 1px 6px #000}
-#behindBar.on{opacity:1;animation:bar 1.2s ease-in-out infinite}
-@keyframes bar{50%{opacity:.65}}
-
-#banner{position:absolute;top:calc(env(safe-area-inset-top) + 58px);left:50%;transform:translate(-50%,-30px);opacity:0;padding:10px 18px;border-radius:99px;background:rgba(12,16,22,.9);border:2px solid var(--c,#fff);font-weight:750;font-size:17px;white-space:nowrap;transition:transform .35s cubic-bezier(.3,1.5,.5,1),opacity .3s;pointer-events:none}
-#banner.on{transform:translate(-50%,0);opacity:1}
-#flash{position:absolute;inset:0;pointer-events:none;opacity:0}
-#flash.go{animation:flash .9s ease-out}
-@keyframes flash{0%{opacity:1}100%{opacity:0}}
-
-@media (max-width:560px){#behindBar{justify-content:flex-end;padding-right:18px}}
-#topbar,#settings{z-index:3} #start{z-index:2}
-#radar{position:absolute;left:calc(env(safe-area-inset-left) + 12px);bottom:calc(env(safe-area-inset-bottom) + 12px);width:118px;height:118px;pointer-events:none}
-
-#topbar{position:absolute;top:calc(env(safe-area-inset-top) + 10px);left:10px;right:10px;display:flex;gap:8px;align-items:center}
+/* --- chrome --- */
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(16px) saturate(140%);backdrop-filter:blur(16px) saturate(140%)}
+#topbar{position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 12px);left:calc(env(safe-area-inset-left) + 12px);right:calc(env(safe-area-inset-right) + 12px);display:flex;gap:8px;align-items:center;pointer-events:none}
+#topbar>*{pointer-events:auto}
 #topbar .sp{flex:1}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:99px;background:rgba(12,16,22,.8);font-size:12.5px;color:var(--mut)}
-.pill i{width:8px;height:8px;border-radius:50%;background:var(--mut)}
-.pill.ok i{background:var(--ok);box-shadow:0 0 8px var(--ok)} .pill.bad i{background:var(--bad)}
-.ibtn{border:0;border-radius:99px;background:rgba(12,16,22,.8);color:var(--fg);height:34px;min-width:34px;padding:0 12px;font:600 14px system-ui,sans-serif}
+#conn{display:inline-flex;align-items:center;gap:9px;height:32px;padding:0 14px 0 12px;border-radius:99px;font-size:12px;letter-spacing:.02em;color:var(--mut)}
+#conn i{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
+#conn.ok i{background:var(--ok);animation:alive 2.4s ease-out infinite}
+#conn.bad i{background:var(--bad)}
+@keyframes alive{0%{box-shadow:0 0 0 0 rgba(93,242,193,.6)}70%,100%{box-shadow:0 0 0 7px rgba(93,242,193,0)}}
+.ib{width:40px;height:40px;border:0;border-radius:50%;color:var(--ink);display:grid;place-items:center;padding:0;cursor:pointer;transition:transform .15s}
+.ib:active{transform:scale(.9)}
+.ib svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 body:not(.running) .run-only{display:none}
 
-#settings{position:absolute;top:calc(env(safe-area-inset-top) + 54px);right:10px;width:min(320px,calc(100% - 20px));background:rgba(15,19,26,.95);border:1px solid var(--line);border-radius:16px;padding:14px;font-size:13.5px}
+#settings{position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 64px);right:calc(env(safe-area-inset-right) + 12px);width:min(340px,calc(100% - 24px));max-height:calc(100% - 90px);overflow:auto;border-radius:24px;padding:18px;font-size:13.5px;background:rgba(12,10,24,.8);border:1px solid var(--line);touch-action:pan-y}
 #settings[hidden]{display:none}
-#settings label{display:block;color:var(--mut);margin-bottom:4px}
-#settings input{width:100%}
-#settings .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
-#settings .row button{flex:1 0 28%;border:0;border-radius:10px;background:var(--line);color:var(--fg);padding:8px 4px;font:600 13px system-ui,sans-serif}
-#dbg{margin-top:10px;color:var(--mut);font:12px ui-monospace,Menlo,monospace}
+#settings h3{margin:0 0 10px;font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+#settings section+section{margin-top:20px}
+#settings .val{float:right;color:var(--ink);letter-spacing:0;font-variant-numeric:tabular-nums}
+#settings input[type=range]{width:100%;accent-color:#b9a6ff}
+#settings .note{color:var(--dim);font-size:12px;margin:6px 0 0}
+.seg{display:flex;gap:2px;padding:3px;border-radius:99px;background:rgba(255,255,255,.05);margin-bottom:10px}
+.seg button{flex:1;border:0;border-radius:99px;background:none;color:var(--mut);padding:7px 0;font:500 12.5px var(--font);cursor:pointer}
+.seg button.on{background:rgba(255,255,255,.13);color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:99px;background:none;color:var(--ink);padding:5px 12px 5px 5px;font:500 12.5px var(--font);cursor:pointer}
+/* a chip's badge mirrors the halo: the icon, dark, inside a dome of the sound's colours */
+.badge{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 50% 110%,var(--k),var(--c) 65%);box-shadow:0 0 10px color-mix(in srgb,var(--c) 70%,transparent);color:rgba(10,4,14,.85)}
+.badge svg{width:64%;height:64%}
+.wide{width:100%;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.04);color:var(--ink);padding:10px;font:500 13px var(--font);cursor:pointer;margin-top:10px}
+#dbg{margin-top:16px;color:var(--dim);font:11px ui-monospace,Menlo,monospace}
 
-/* --- start screen --- */
-#start{position:absolute;inset:0;overflow:auto;background:radial-gradient(circle at 50% 0,#17202c,#07090c 70%);padding:calc(env(safe-area-inset-top) + 64px) 18px 28px;touch-action:pan-y}
+#toast{position:absolute;z-index:3;left:50%;top:calc(env(safe-area-inset-top) + 64px);transform:translate(-50%,-6px);padding:10px 16px;border-radius:16px;font-size:13.5px;max-width:86%;text-align:center;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* --- start screen (the halo keeps breathing behind it) --- */
+#start{position:absolute;z-index:1;inset:0;overflow:auto;display:flex;padding:calc(env(safe-area-inset-top) + 72px) 28px calc(env(safe-area-inset-bottom) + 36px);touch-action:pan-y}
 body.running #start{display:none}
-body:not(.running) #banner,body:not(.running) #cards,body:not(.running) #hints{display:none}
-#start .wrap{max-width:460px;margin:0 auto}
-#start h1{font-size:26px;margin:0 0 6px}
-#start p.lead{color:var(--mut);margin:0 0 18px}
-.go{display:block;width:100%;text-align:left;border:0;border-radius:16px;background:#151a22;color:var(--fg);padding:16px;margin:0 0 10px;font:inherit;cursor:pointer}
-.go b{display:block;font-size:17px;margin-bottom:2px}
+#start .wrap{width:100%;max-width:400px;margin:auto}
+.mark{font-size:68px;font-weight:200;letter-spacing:.06em;line-height:1;margin:0 0 16px}
+.lead{color:var(--mut);font-size:15.5px;line-height:1.55;margin:0 0 28px;max-width:34ch}
+.go{display:block;width:100%;text-align:left;border:1px solid var(--line);border-radius:24px;color:var(--ink);padding:17px 22px;margin:0 0 10px;font:inherit;cursor:pointer;transition:border-color .25s,transform .15s}
+.go:not(:disabled):hover{border-color:rgba(243,240,255,.3)}
+.go:not(:disabled):active{transform:scale(.985)}
+.go b{display:block;font-weight:600;font-size:16px;margin-bottom:2px}
 .go span{color:var(--mut);font-size:13px}
-.go.main{background:linear-gradient(135deg,#1f3b6b,#18273f)}
-.go:disabled{opacity:.38;cursor:not-allowed}
-#why{background:#2b1d0c;color:#f7c77a;border-radius:12px;padding:12px;font-size:13px;margin:0 0 12px}
+.go.main{border-color:transparent;background:linear-gradient(var(--glass-hi),var(--glass-hi)) padding-box,linear-gradient(100deg,#3d7bff,#14d2b9 30%,#ffb03a 60%,#ff2e63 85%,#b27bff) border-box}
+.go:disabled{opacity:.36;cursor:not-allowed}
+#why{background:rgba(255,176,58,.1);border:1px solid rgba(255,176,58,.25);color:#ffd08a;border-radius:16px;padding:12px 14px;font-size:13px;margin:0 0 14px}
 #why:empty{display:none}
-#start .tip{color:var(--mut);font-size:13px;margin-top:14px}
-#toast{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);background:rgba(12,16,22,.92);padding:10px 16px;border-radius:12px;font-size:14px;max-width:88%;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none}
-#toast.on{opacity:1}
+.read{display:flex;gap:18px;align-items:center;margin-top:26px;color:var(--dim);font-size:12.5px;line-height:1.5}
+.ring{position:relative;flex:none;width:112px;height:72px;border:1.5px solid rgba(243,240,255,.2);border-radius:16px}
+.ring i{position:absolute;font-style:normal;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
+.ring .t{top:5px;left:50%;transform:translateX(-50%)}
+.ring .b{bottom:5px;left:50%;transform:translateX(-50%)}
+.ring .l{left:7px;top:50%;transform:translateY(-50%)}
+.ring .r{right:7px;top:50%;transform:translateY(-50%)}
+.heat{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;margin-top:18px;color:var(--dim);font-size:12.5px;line-height:1.4}
+.heat i{width:44px;height:10px;border-radius:99px}
+.heat b{color:var(--mut);font-weight:600}
 </style>
 </head>
 <body>
@@ -92,61 +89,73 @@ body:not(.running) #banner,body:not(.running) #cards,body:not(.running) #hints{d
 <canvas id="world"></canvas>
 
 <div id="hud">
-  <div id="cards"></div>
-  <div id="hints"></div>
-  <div id="behindBar">⟲ Sound behind you</div>
-  <div id="flash"></div>
-  <div id="banner"></div>
-  <canvas id="radar" class="run-only" width="236" height="236"></canvas>
+  <canvas id="halo"></canvas>
 
   <div id="topbar">
-    <span id="conn" class="pill"><i></i><span>connecting…</span></span>
+    <span id="conn" class="glass"><i></i><span>connecting…</span></span>
     <span class="sp"></span>
-    <button class="ibtn run-only" id="testBtn">Test</button>
-    <button class="ibtn run-only" id="gear">⚙</button>
-    <button class="ibtn run-only" id="exit">✕</button>
+    <button class="ib glass run-only" id="testBtn" title="Test sound (T)" aria-label="Test sound"><svg viewBox="0 0 24 24"><path d="M3 12c2-4.5 4-4.5 6 0s4 4.5 6 0 4-4.5 6 0"/></svg></button>
+    <button class="ib glass run-only" id="gear" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+    <button class="ib glass run-only" id="exit" title="Exit" aria-label="Exit"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
 
-  <div id="settings" hidden>
-    <label for="fov">Camera field of view: <b id="fovVal"></b>°</label>
-    <input id="fov" type="range" min="40" max="100" step="1">
-    <div style="color:var(--mut);font-size:12px;margin-top:4px">If cards slide off-screen too early, raise it. Too late, lower it.</div>
-    <div class="row" id="testRow"></div>
+  <div id="settings" class="glass" hidden>
+    <section>
+      <h3>Field of view <span class="val"><b id="fovVal"></b>°</span></h3>
+      <input id="fov" type="range" min="40" max="100" step="1">
+      <p class="note">If a wave reaches the corner before its sound leaves the screen, raise it. If it gets there late, lower it.</p>
+    </section>
+    <section>
+      <h3>Test a sound</h3>
+      <div class="seg" id="dirRow"></div>
+      <div class="chips" id="testRow"></div>
+      <button class="wide" id="scene">Play the conversation scenario</button>
+    </section>
     <div id="dbg"></div>
   </div>
 
-  <div id="toast"></div>
+  <div id="toast" class="glass"></div>
 
   <div id="start">
     <div class="wrap">
-      <h1>Sound AR display</h1>
-      <p class="lead">Shows where sounds are coming from, over the real world. Sounds arrive from the tap remote or the mic detector through the laptop.</p>
+      <div class="mark">halo</div>
+      <p class="lead">Sound, made visible. Each sound around you grows out of the edge of your view, on the side it comes from, in a shape that feels the way it sounds.</p>
       <div id="why"></div>
-      <button class="go main" id="goAR" disabled><b>Start AR</b><span id="arSub">Checking for WebXR…</span></button>
-      <button class="go" id="goCam"><b>Start camera view</b><span>Camera + motion sensors. Works on iPhone and Android.</span></button>
-      <button class="go" id="goPrev"><b>Laptop preview</b><span>No camera. Drag or use ← → to turn. Press T for a test sound.</span></button>
-      <p class="tip">Hold the phone pointing the way you're facing before you start. Sounds are placed relative to where you face when they arrive.</p>
+      <button class="go glass main" id="goAR" disabled><b>Start AR</b><span id="arSub">Checking for WebXR…</span></button>
+      <button class="go glass" id="goCam"><b>Camera view</b><span>Camera + motion sensors. Works on iPhone and Android.</span></button>
+      <button class="go glass" id="goPrev"><b>Preview</b><span>No camera. Drag or ← → to turn. T = test sound, 1–9 and 0 = each sound.</span></button>
+      <div class="read">
+        <div class="ring" aria-hidden="true"><i class="t">behind</i><i class="l">left</i><i class="r">right</i><i class="b">in front</i></div>
+        <div>The edge of the view is a ring around you. Hold the phone the way you're facing before you start: sounds are placed relative to where you face when they arrive.</div>
+      </div>
+      <div class="heat">
+        <i style="background:linear-gradient(90deg,#ff2e4d,#ff6a1a,#ffb21f)"></i><div><b>Warm, look now.</b> Alarms, horns, traffic. Red is danger.</div>
+        <i style="background:linear-gradient(90deg,#3d7bff,#14d2b9)"></i><div><b>Cool, calm.</b> Voices, the doorbell.</div>
+        <i style="background:linear-gradient(90deg,#7b5cff,#a66bff)"></i><div><b>Purple, a low hum.</b> The room around you, sounds not yet known.</div>
+      </div>
     </div>
   </div>
 </div>
 
 <script type="module">
-import { SOUNDS, resolve, connect, dirWord, wrap, drawCard } from '/common.js';
+import { SOUNDS, resolve, connect, wrap } from '/common.js';
+import { Halo } from '/halo.js';
+import { iconSvg } from '/icons.js';
 
 const $ = (id) => document.getElementById(id);
 const D2R = Math.PI / 180, R2D = 180 / Math.PI;
-const CARD_DIST = 1.6, CARD_W = 0.5;          // AR card: metres away, metres wide
-const FADE_MS = 600;
+const QUEST_FOV = 70, QUEST_PX = [1024, 640];   // Quest: the halo is drawn on a head-locked frame this wide (degrees), at this resolution
 
 const S = {
   mode: null,              // 'ar' | 'camera' | 'preview'
-  heading: 0, pitch: 0,    // degrees; heading is clockwise, relative to wherever the phone started
-  hx: 0, hy: 1, pz: 0, gotSensor: false,
+  heading: 0,              // degrees, clockwise, relative to wherever the device started
+  hx: 0, hy: 1, gotSensor: false,
   camFov: load('camFov', 66), prevFov: 70,
-  alerts: new Map(),       // id -> record
-  domHints: true,          // false on Quest (no DOM overlay in AR), so hints are drawn in 3D
+  testDir: 'any',
+  domOverlay: true,        // false on Quest (no page over AR), so the halo is drawn onto a 3D frame instead
 };
-window.__sar = S;   // handy in the console: __sar.alerts, __sar.heading
+const halo = new Halo($('halo'));
+window.__sar = S; S.halo = halo;   // handy in the console: __sar.halo.voices, __sar.heading
 const isQuest = /OculusBrowser|Quest/i.test(navigator.userAgent);
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
@@ -166,10 +175,10 @@ const hub = connect('display', {
   onMessage: (m) => {
     if (m.type === 'status') { remotes = m.remotes + m.mics; showConn(); }
     if (m.type === 'alert') addAlert(m);
-    else if (m.type === 'clear') clearAll();
+    else if (m.type === 'clear') halo.clear();
   },
 });
-function setConn(cls, text) { $('conn').className = 'pill ' + cls; $('conn').lastElementChild.textContent = text; }
+function setConn(cls, text) { $('conn').className = 'glass ' + cls; $('conn').lastElementChild.textContent = text; }
 
 // ================= capability check / start screen =================
 const threeP = import('/vendor/three.module.min.js').catch(() => null);   // preload so AR starts inside the tap
@@ -179,7 +188,7 @@ const threeP = import('/vendor/three.module.min.js').catch(() => null);   // pre
   let ar = false;
   try { ar = !!navigator.xr && await navigator.xr.isSessionSupported('immersive-ar'); } catch {}
   $('goAR').disabled = !ar;
-  $('arSub').textContent = ar ? (isQuest ? 'Passthrough AR on the Quest. Cards stay pinned in the room.' : 'Real AR with ARCore. Cards stay pinned in the room, and you can walk around them.')
+  $('arSub').textContent = ar ? (isQuest ? 'Passthrough AR on the Quest.' : 'Real AR with ARCore, over the camera.')
                               : isIOS ? 'Not available on iPhone. Use camera view.' : 'Not available here. On Android, install "Google Play Services for AR".';
   if (!navigator.mediaDevices?.getUserMedia) $('goCam').disabled = true;
   if (isQuest) $('goCam').hidden = true;
@@ -199,22 +208,26 @@ $('fov').oninput = (e) => {
   const v = +e.target.value; $('fovVal').textContent = v;
   if (S.mode === 'preview') S.prevFov = v; else { S.camFov = v; save('camFov', v); }
 };
-for (const k of Object.keys(SOUNDS)) {
-  if (k === 'behind') continue;
-  for (const [ang, lbl] of [[-90, 'L'], [180, 'back'], [90, 'R']]) {
-    if (k !== 'fire' && k !== 'bus') continue;       // keep the test row small
-    const b = document.createElement('button'); b.textContent = `${SOUNDS[k].icon} ${lbl}`;
-    b.onclick = () => testAlert(k, ang); $('testRow').append(b);
-  }
+const DIRS = { any: null, ahead: 0, right: 90, behind: 180, left: -90 };
+for (const k of Object.keys(DIRS)) {
+  const b = document.createElement('button'); b.textContent = k; b.classList.toggle('on', k === S.testDir);
+  b.onclick = () => { S.testDir = k; for (const x of $('dirRow').children) x.classList.toggle('on', x === b); };
+  $('dirRow').append(b);
 }
+for (const [k, s] of Object.entries(SOUNDS)) {
+  const b = document.createElement('button'); b.style.setProperty('--c', s.color); b.style.setProperty('--k', s.core);
+  b.innerHTML = `<span class="badge">${iconSvg(s.icon)}</span>${s.label}`; b.onclick = () => testAlert(k);
+  $('testRow').append(b);
+}
+$('scene').onclick = conversation;
 
 function begin(mode) {
   S.mode = mode;
   document.body.className = 'running mode-' + mode;
+  halo.clear();                              // the start screen's sounds sink away
   $('fov').value = mode === 'preview' ? S.prevFov : S.camFov; $('fovVal').textContent = $('fov').value;
   navigator.wakeLock?.request('screen').catch(() => {});
-  if (mode === 'preview') toast('Drag or use ← → to look around. T = test sound.');
-  if (mode !== 'ar') requestAnimationFrame(domLoop);
+  if (mode === 'preview') toast('Drag or use ← → to look around. T = test sound, 1–9 and 0 = each sound.');
 }
 
 function stop() {
@@ -222,101 +235,48 @@ function stop() {
   const v = $('cam'); v.srcObject?.getTracks().forEach(t => t.stop()); v.srcObject = null;
   removeEventListener('deviceorientation', onOrient);
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  cancelAnimationFrame(sceneAnim);
   S.mode = null; document.body.className = ''; $('settings').hidden = true;
-  clearAll();
+  halo.clear();
 }
+
+// Start screen: a few sounds come and go around the edge, so the page itself shows the language.
+const IDLE = [['crackle', -40], ['doorbell', 100], ['name', 160], ['bus', -110], ['horn', 45], ['bike', -75], ['siren', -150]];
+let idleN = 0;
+function idle() {
+  if (S.mode) return;
+  const now = performance.now();
+  if (!halo.voices.some(v => v.key === 'ambient' && v.end - now > 1000)) idleVoice('ambient', 0, 60000, 0.22);
+  const [k, angle] = IDLE[idleN++ % IDLE.length];
+  idleVoice(k, angle, 6500, 0.4);
+}
+function idleVoice(key, angle, ttl, level) { const a = resolve({ sound: key }); halo.add({ key, color: a.color, core: a.core, icon: a.icon, form: a.form, yaw: angle, ttl, level }); }
+idle(); setInterval(idle, 2400);
 
 // ================= alerts =================
 function addAlert(m) {
   if (!S.mode) return;                       // still on the start screen
-  const a = resolve(m);
-  const rec = { a, born: performance.now(), ttl: a.ttl || 6000, worldYaw: wrap(S.heading + a.angle) };
-  S.alerts.set(a.id, rec);
-  if (S.mode === 'ar') xrPlace(rec); else domCard(rec);
-  banner(a); flash(a.color);
-  navigator.vibrate?.(Math.abs(a.angle) > 135 ? [90, 60, 90, 60, 90] : [70]);
+  const a = resolve(m), back = Math.abs(a.angle) > 135;
+  // hazards, and anything behind you, also send a light round the edge to get your attention
+  halo.add({ key: a.sound, color: a.color, core: a.core, icon: a.icon, form: a.form, level: a.level, ttl: a.ttl || 6000,
+             yaw: wrap(S.heading + a.angle), alert: !!a.form.hazard || back });
+  navigator.vibrate?.(a.form.hazard ? [140, 70, 140, 70, 140] : back ? [90, 60, 90, 60, 90] : [60]);
 }
-
-function removeAlert(id) {
-  const r = S.alerts.get(id); if (!r) return;
-  r.el?.remove(); r.hint?.remove();
-  if (r.obj) { xr.scene.remove(r.obj); r.obj.traverse(o => { o.material?.map?.dispose(); o.material?.dispose(); o.geometry?.dispose(); }); }
-  if (r.hint3d) { xr.head.remove(r.hint3d); r.hint3d.material.map.dispose(); r.hint3d.material.dispose(); }
-  S.alerts.delete(id);
-}
-function clearAll() { for (const id of [...S.alerts.keys()]) removeAlert(id); }
 
 let testSeq = 0;
+const ANGLES = [0, 45, 90, 135, 180, -135, -90, -45];
 function testAlert(sound, angle) {
-  const keys = Object.keys(SOUNDS).filter(k => k !== 'behind');
+  const keys = Object.keys(SOUNDS);
   sound ??= keys[testSeq++ % keys.length];
-  angle ??= Math.round((Math.random() * 360 - 180) / 15) * 15;
+  angle ??= S.testDir === 'any' ? ANGLES[Math.random() * 8 | 0] + Math.round(Math.random() * 20 - 10) : DIRS[S.testDir];
   if (!hub.send({ type: 'alert', sound, angle })) addAlert({ type: 'alert', id: 'local' + Date.now(), sound, angle, ttl: 6000 });
 }
+// Local-only sound, for the scenario and the console: __sar.add('fire', 90)
+const local = (sound, angle, ttl = 6500) => addAlert({ id: 'local' + Math.random(), sound, angle, ttl });
+S.add = local;
 
-// ================= shared HUD (DOM) =================
-let bannerTimer;
-function banner(a) {
-  const b = $('banner'); b.style.setProperty('--c', a.color);
-  b.textContent = `${a.icon}  ${a.label} · ${dirWord(a.angle)}`;
-  b.classList.add('on'); clearTimeout(bannerTimer); bannerTimer = setTimeout(() => b.classList.remove('on'), 2600);
-}
-function flash(color) {
-  const f = $('flash'); f.style.boxShadow = `inset 0 0 140px 40px ${color}`;
-  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-}
 let toastTimer;
 function toast(t, ms = 3500) { const e = $('toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove('on'), ms); }
-
-// items: [{rec, rel, onScreen}] — rel = degrees from where you're looking (+ = right)
-function updateHud(items, fovDeg) {
-  const now = performance.now(), slots = { left: 0, right: 0 };
-  let anyBehind = false;
-  const H = innerHeight;
-  for (const { rec, rel, onScreen } of items) {
-    const age = now - rec.born;
-    // head-locked hint for anything you can't see
-    if (!onScreen && S.domHints) {
-      const side = rel > 0 ? 'right' : 'left', back = Math.abs(rel) > 135;
-      if (!rec.hint) {
-        rec.hint = document.createElement('div'); rec.hint.style.setProperty('--c', rec.a.color);
-        rec.hint.innerHTML = `<span class="ar"></span><span>${rec.a.icon}</span><span class="dg"></span>`;
-        $('hints').append(rec.hint);
-      }
-      rec.hint.className = `hint ${side}${back ? ' back' : ''}`;
-      rec.hint.querySelector('.ar').textContent = side === 'right' ? '›' : '‹';
-      rec.hint.querySelector('.dg').textContent = `${Math.round(Math.abs(rel))}°`;
-      rec.hint.style.top = `${H * 0.34 + slots[side]++ * 54}px`;
-      rec.hint.style.opacity = age > rec.ttl - FADE_MS ? 0 : 1;
-      if (back) anyBehind = true;
-    } else if (rec.hint) { rec.hint.remove(); rec.hint = null; }
-  }
-  $('behindBar').classList.toggle('on', anyBehind && S.domHints);
-  drawRadar(items, fovDeg);
-}
-
-function drawRadar(items, fovDeg) {
-  const c = $('radar'), g = c.getContext('2d'), W = c.width, cx = W / 2, R = W / 2 - 6, now = performance.now();
-  g.clearRect(0, 0, W, W);
-  g.beginPath(); g.arc(cx, cx, R, 0, Math.PI * 2); g.fillStyle = 'rgba(12,16,22,.78)'; g.fill();
-  g.lineWidth = 2; g.strokeStyle = '#2d3645'; g.stroke();
-  // behind zone
-  g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R, (90 - 45) * D2R, (90 + 45) * D2R); g.closePath(); g.fillStyle = 'rgba(255,77,79,.13)'; g.fill();
-  // field of view wedge (up = where you're looking)
-  const h = fovDeg / 2 * D2R;
-  g.beginPath(); g.moveTo(cx, cx); g.arc(cx, cx, R, -Math.PI / 2 - h, -Math.PI / 2 + h); g.closePath(); g.fillStyle = 'rgba(91,157,255,.18)'; g.fill();
-  // you
-  g.beginPath(); g.arc(cx, cx, 7, 0, Math.PI * 2); g.fillStyle = '#e8ecf1'; g.fill();
-  g.font = '26px "Apple Color Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (const { rec, rel } of items) {
-    const age = now - rec.born, x = cx + Math.sin(rel * D2R) * R * 0.72, y = cx - Math.cos(rel * D2R) * R * 0.72;
-    g.globalAlpha = age > rec.ttl - FADE_MS ? Math.max(0, (rec.ttl - age) / FADE_MS) : 1;
-    if (age < 1500) { const p = (age % 750) / 750; g.beginPath(); g.arc(x, y, 14 + p * 22, 0, Math.PI * 2); g.strokeStyle = rec.a.color; g.lineWidth = 3 * (1 - p); g.stroke(); }
-    g.beginPath(); g.arc(x, y, 17, 0, Math.PI * 2); g.fillStyle = rec.a.color; g.fill();
-    g.fillText(rec.a.icon, x, y + 1);
-    g.globalAlpha = 1;
-  }
-}
 
 // ================= camera view (any phone) =================
 async function startCamera() {
@@ -336,7 +296,7 @@ async function startCamera() {
   setTimeout(() => { if (S.mode === 'camera' && !S.gotSensor) toast('No motion sensor data. Drag to look around instead.', 5000); }, 1500);
 }
 
-// Turns the phone's orientation into "which way is the back camera pointing" (heading) and tilt (pitch).
+// Turns the phone's orientation into "which way is the back camera pointing" (heading).
 function onOrient(e) {
   if (e.alpha == null) return;
   S.gotSensor = true;
@@ -344,14 +304,11 @@ function onOrient(e) {
   // back camera looks along the device's -Z axis; rotate that into the world frame (W3C Z-X'-Y'' order)
   const vx = -Math.cos(a) * Math.sin(g) - Math.sin(a) * Math.sin(b) * Math.cos(g);
   const vy = -Math.sin(a) * Math.sin(g) + Math.cos(a) * Math.sin(b) * Math.cos(g);
-  const vz = -Math.cos(b) * Math.cos(g);
   const hor = Math.hypot(vx, vy);
   if (hor > 0.25) {             // phone lying flat has no useful heading; keep the last one
     S.hx += (vx / hor - S.hx) * 0.35; S.hy += (vy / hor - S.hy) * 0.35;
     S.heading = Math.atan2(S.hx, S.hy) * R2D;
   }
-  S.pz += (vz - S.pz) * 0.35;
-  S.pitch = Math.asin(Math.max(-1, Math.min(1, S.pz))) * R2D;
 }
 
 // ================= laptop preview (and drag fallback in camera view) =================
@@ -364,10 +321,12 @@ addEventListener('pointermove', (e) => {
 addEventListener('pointerup', () => drag = null);
 addEventListener('keydown', (e) => {
   if (!S.mode) return;
+  const n = e.key === '0' ? 10 : +e.key;
   if (e.key === 'ArrowLeft' || e.key === 'a') S.heading = wrap(S.heading - 8);
   if (e.key === 'ArrowRight' || e.key === 'd') S.heading = wrap(S.heading + 8);
   if (e.key === 't' || e.key === 'T') testAlert();
-  if (e.key === 'c' || e.key === 'C') hub.send({ type: 'clear' }) || clearAll();
+  if (e.key === 'c' || e.key === 'C') hub.send({ type: 'clear' }) || halo.clear();
+  if (n >= 1 && n <= 10 && Object.keys(SOUNDS)[n - 1]) testAlert(Object.keys(SOUNDS)[n - 1]);
 });
 
 // Horizontal field of view actually shown on screen, in degrees.
@@ -380,66 +339,90 @@ function screenFov() {
   return 2 * Math.atan((W / s / 2) / focal) * R2D;
 }
 
-function domCard(rec) {
-  const el = document.createElement('div');
-  el.className = 'card'; el.style.setProperty('--c', rec.a.color);
-  el.innerHTML = `<div class="in"><div class="ic">${rec.a.icon}</div><div><div class="t">${rec.a.label}</div><div class="s">from ${dirWord(rec.a.angle)}</div></div></div>`;
-  $('cards').append(el); rec.el = el;
-}
-
+// Start screen, preview and camera view all draw here; AR draws from its own frame loop.
+let domLooping = false;
+function startDomLoop() { if (!domLooping) { domLooping = true; requestAnimationFrame(domLoop); } }
 function domLoop() {
-  if (!S.mode || S.mode === 'ar') return;
-  const W = innerWidth, H = innerHeight, fov = screenFov();
-  const f = (W / 2) / Math.tan(fov / 2 * D2R), now = performance.now();
-  const horizon = Math.max(H * 0.22, Math.min(H * 0.78, H / 2 + f * Math.tan(S.pitch * D2R)));
-  if (S.mode === 'preview') drawWorld(W, H, f, horizon);
-  const items = [];
-  for (const [id, rec] of S.alerts) {
-    const age = now - rec.born;
-    if (age > rec.ttl) { removeAlert(id); continue; }
-    const rel = wrap(rec.worldYaw - S.heading);
-    let onScreen = false;
-    if (Math.abs(rel) < 80) {
-      const x = W / 2 + f * Math.tan(rel * D2R);
-      onScreen = x > 30 && x < W - 30;
-      if (rec.el) {
-        const w = rec.el.offsetWidth, h = rec.el.offsetHeight;
-        rec.el.style.transform = `translate(${x - w / 2}px,${horizon - h / 2}px)`;
-      }
+  if (S.mode === 'ar') { domLooping = false; return; }
+  const now = performance.now();
+  if (!S.mode) halo.draw(now, 0, 64);
+  else {
+    const fov = screenFov();
+    if (S.mode === 'preview') drawWorld(innerWidth, innerHeight, (innerWidth / 2) / Math.tan(fov / 2 * D2R));
+    halo.draw(now, S.heading, fov);
+    if (!$('settings').hidden) {
+      const n = halo.voices.length;
+      $('dbg').textContent = `heading ${S.heading.toFixed(0)}° · fov ${fov.toFixed(0)}° · ${n} sound${n === 1 ? '' : 's'}${S.gotSensor || S.mode === 'preview' ? '' : ' · no sensor'}`;
     }
-    if (rec.el) { rec.el.style.visibility = onScreen ? 'visible' : 'hidden'; rec.el.classList.toggle('fade', age > rec.ttl - FADE_MS); }
-    items.push({ rec, rel, onScreen });
   }
-  updateHud(items, fov);
-  $('dbg').textContent = `heading ${S.heading.toFixed(0)}°  pitch ${S.pitch.toFixed(0)}°  on-screen fov ${fov.toFixed(0)}°${S.gotSensor ? '' : '  (no sensor)'}`;
   requestAnimationFrame(domLoop);
 }
+startDomLoop();
 
-// A fake room for the laptop preview: horizon, floor lines and direction markers.
-function drawWorld(W, H, f, horizon) {
-  const c = $('world'), dpr = devicePixelRatio || 1;
-  if (c.width !== W * dpr) { c.width = W * dpr; c.height = H * dpr; }
+// A dim pretend room for the preview: horizon, floor lines, compass marks, and a faint glow where each
+// pretend sound source is (preview only; in the real world the source is the thing itself).
+function drawWorld(W, H, f) {
+  const c = $('world'), dpr = Math.min(devicePixelRatio || 1, 2), hz = H * 0.5;
+  if (c.width !== Math.round(W * dpr) || c.height !== Math.round(H * dpr)) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
   const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  let gr = g.createLinearGradient(0, 0, 0, horizon); gr.addColorStop(0, '#0d1522'); gr.addColorStop(1, '#1d2a3d');
-  g.fillStyle = gr; g.fillRect(0, 0, W, horizon);
-  gr = g.createLinearGradient(0, horizon, 0, H); gr.addColorStop(0, '#20242b'); gr.addColorStop(1, '#0e1013');
-  g.fillStyle = gr; g.fillRect(0, horizon, W, H - horizon);
-  g.strokeStyle = '#3a4556'; g.lineWidth = 1; g.beginPath(); g.moveTo(0, horizon); g.lineTo(W, horizon); g.stroke();
-  const names = { 0: 'START', 90: 'START +90° →', 180: 'BEHIND START', '-90': '← START −90°' };
-  g.textAlign = 'center'; g.font = '600 13px system-ui,sans-serif';
+  let gr = g.createLinearGradient(0, 0, 0, hz); gr.addColorStop(0, '#05040a'); gr.addColorStop(1, '#141027');
+  g.fillStyle = gr; g.fillRect(0, 0, W, hz);
+  gr = g.createLinearGradient(0, hz, 0, H); gr.addColorStop(0, '#0e0b1c'); gr.addColorStop(1, '#030206');
+  g.fillStyle = gr; g.fillRect(0, hz, W, H - hz);
+  g.fillStyle = 'rgba(190,170,255,.12)'; g.fillRect(0, hz - 0.5, W, 1);
+  const names = { 0: 'start', 90: '90° right', 180: 'behind start', '-90': '90° left' };
+  g.textAlign = 'center'; g.font = '500 11px ui-rounded,system-ui,sans-serif'; g.lineWidth = 1;
   for (let d = -180; d < 180; d += 15) {
     const rel = wrap(d - S.heading); if (Math.abs(rel) > 80) continue;
-    const x = W / 2 + f * Math.tan(rel * D2R), major = d % 45 === 0;
-    g.strokeStyle = major ? '#4a5870' : '#2a3342';
-    g.beginPath(); g.moveTo(x, horizon - (major ? 60 : 24)); g.lineTo(x, horizon); g.stroke();
-    // floor line fanning toward the viewer
-    g.beginPath(); g.moveTo(x, horizon); g.lineTo(W / 2 + (x - W / 2) * 6, H * 3); g.strokeStyle = '#262b33'; g.stroke();
-    if (names[d] !== undefined) { g.fillStyle = '#6f7d92'; g.fillText(names[d], x, horizon - 70); }
+    const x = W / 2 + f * Math.tan(rel * D2R), major = d % 90 === 0;
+    g.strokeStyle = 'rgba(255,255,255,.035)';
+    g.beginPath(); g.moveTo(x, hz); g.lineTo(W / 2 + (x - W / 2) * 7, H * 3); g.stroke();   // floor line fanning toward you
+    g.strokeStyle = major ? 'rgba(255,255,255,.2)' : 'rgba(255,255,255,.07)';
+    g.beginPath(); g.moveTo(x, hz - (major ? 22 : 7)); g.lineTo(x, hz); g.stroke();
+    if (names[d] !== undefined) { g.fillStyle = 'rgba(243,240,255,.32)'; g.fillText(names[d].toUpperCase(), x, hz - 32); }
+  }
+  for (const v of halo.voices) {
+    if (v.form.omni || !v.k) continue;
+    const rel = wrap(v.yaw - S.heading); if (Math.abs(rel) > 80) continue;
+    const x = W / 2 + f * Math.tan(rel * D2R), y = hz - 70, r = 24;
+    gr = g.createRadialGradient(x, y, 0, x, y, r);
+    gr.addColorStop(0, `rgba(${v.c2},${0.5 * v.k.alpha})`); gr.addColorStop(1, `rgba(${v.c1},0)`);
+    g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r);
   }
 }
 
+// ================= scenario + demo (preview) =================
+// The "Scenario one: conversation" sketch: someone talks right in front of you, then you slowly turn away.
+// Their voice slides along the bottom edge, into the corner, then up the side once they're off-screen.
+let sceneAnim = 0;
+function conversation() {
+  if (S.mode !== 'preview') return toast('The scenario plays in Preview, where it can turn the view for you.');
+  halo.clear(); cancelAnimationFrame(sceneAnim); $('settings').hidden = true;
+  const t0 = performance.now(), from = S.heading;
+  setTimeout(() => S.mode === 'preview' && local('name', 0, 11500), 450);
+  const tick = () => {
+    const q = Math.min(1, Math.max(0, (performance.now() - t0 - 2500) / 6500));
+    S.heading = wrap(from - 100 * q * q * (3 - 2 * q));
+    if (q < 1 && S.mode === 'preview') sceneAnim = requestAnimationFrame(tick);
+  };
+  sceneAnim = requestAnimationFrame(tick);
+}
+
+// /display?demo : starts the preview and loops through the language on its own.
+async function showcase() {
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  while (S.mode === 'preview') {
+    conversation(); await wait(12500);
+    if (S.mode !== 'preview') break;
+    S.heading = 0; local('ambient', -140, 13500); local('crackle', -35); local('fire', 100); await wait(7000);
+    if (S.mode !== 'preview') break;
+    local('bus', 30); local('doorbell', -95); local('siren', 165); await wait(7000);
+  }
+}
+if (new URLSearchParams(location.search).has('demo')) { begin('preview'); showcase(); }
+
 // ================= WebXR AR (Android Chrome + Quest) =================
-const xr = { session: null, THREE: null, renderer: null, scene: null, head: null, ref: null, pose: null, queue: [] };
+const xr = { session: null, THREE: null, renderer: null, scene: null, head: null, ref: null, frame: null, tex: null };
 window.__xr = xr;
 
 async function startAR() {
@@ -463,111 +446,46 @@ async function startAR() {
   await r.xr.setSession(session);
   xr.ref = r.xr.getReferenceSpace();
 
-  S.domHints = !!session.domOverlayState;   // Android: DOM hints over AR. Quest: none, so draw them in 3D.
+  // Android shows the page over the camera (DOM overlay), so the halo canvas just works.
+  // Quest can't, so the same halo is drawn into a texture on a frame fixed 1 m in front of your eyes.
+  S.domOverlay = !!session.domOverlayState;
+  if (!S.domOverlay) {
+    const cv = document.createElement('canvas');
+    halo.use(cv, QUEST_PX);
+    xr.tex = new THREE.CanvasTexture(cv); xr.tex.colorSpace = THREE.SRGBColorSpace;
+    const w = 2 * Math.tan(QUEST_FOV / 2 * D2R);
+    xr.frame = new THREE.Mesh(new THREE.PlaneGeometry(w, w * QUEST_PX[1] / QUEST_PX[0]),
+      new THREE.MeshBasicMaterial({ map: xr.tex, transparent: true, depthTest: false, depthWrite: false }));
+    xr.frame.position.set(0, 0, -1); xr.frame.renderOrder = 10; xr.head.add(xr.frame);
+  }
   session.addEventListener('end', onAREnd);
   begin('ar');
   r.setAnimationLoop(arFrame);
 }
 
 function onAREnd() {
-  clearAll();
+  halo.use($('halo')); halo.clear();
+  xr.frame?.geometry.dispose(); xr.frame?.material.dispose(); xr.tex?.dispose();
   xr.renderer.setAnimationLoop(null); xr.renderer.domElement.remove(); xr.renderer.dispose();
-  Object.assign(xr, { session: null, renderer: null, scene: null, head: null, pose: null, queue: [] });
-  S.domHints = true; S.mode = null; document.body.className = '';
+  Object.assign(xr, { session: null, renderer: null, scene: null, head: null, frame: null, tex: null });
+  S.domOverlay = true; S.mode = null; document.body.className = '';
+  startDomLoop();
 }
-
-// Put a new card CARD_DIST metres away, at `angle` from where the camera faces right now. It then stays there.
-function xrPlace(rec) {
-  if (!xr.pose) { xr.queue.push(rec); return; }
-  const T = xr.THREE, { pos, fwd, right } = xr.pose, th = rec.a.angle * D2R;
-  const dir = fwd.clone().multiplyScalar(Math.cos(th)).add(right.clone().multiplyScalar(Math.sin(th)));
-  const obj = new T.Group();
-  obj.position.copy(pos).addScaledVector(dir, CARD_DIST); obj.position.y = pos.y - 0.05;
-
-  const tex = new T.CanvasTexture(drawCard(rec.a, { sub: `from ${dirWord(rec.a.angle)}` })); tex.colorSpace = T.SRGBColorSpace;
-  const card = new T.Mesh(new T.PlaneGeometry(CARD_W, CARD_W * 220 / 640),
-    new T.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
-  card.renderOrder = 10;
-  const ring = new T.Mesh(new T.RingGeometry(0.2, 0.215, 64),
-    new T.MeshBasicMaterial({ color: rec.a.color, transparent: true, depthTest: false, depthWrite: false, side: T.DoubleSide }));
-  ring.renderOrder = 9; ring.scale.set(1.35, 0.55, 1);
-  obj.add(ring, card); rec.obj = obj; rec.card = card; rec.ring = ring;
-  xr.scene.add(obj);
-}
-
-const easeBack = (t) => { const c = 1.9; t = Math.min(1, t) - 1; return 1 + (c + 1) * t * t * t + c * t * t; };
 
 function arFrame(time, frame) {
   if (!frame || !xr.session) return;         // three.js can call once more after the session ends
   const T = xr.THREE, pose = frame.getViewerPose(xr.ref);
   if (pose) {
     const p = pose.transform.position, o = pose.transform.orientation;
-    const q = new T.Quaternion(o.x, o.y, o.z, o.w), pos = new T.Vector3(p.x, p.y, p.z);
-    const f3 = new T.Vector3(0, 0, -1).applyQuaternion(q);
-    const fwd = new T.Vector3(f3.x, 0, f3.z); if (fwd.lengthSq() < 1e-4) fwd.set(0, 0, -1); fwd.normalize();
-    const right = new T.Vector3(-fwd.z, 0, fwd.x);
-    xr.pose = { pos, q, fwd, right };
-    xr.head.position.copy(pos); xr.head.quaternion.copy(q);
-    while (xr.queue.length) xrPlace(xr.queue.shift());
-
-    const view = pose.views[0];
-    const V = new T.Matrix4().fromArray(view.transform.inverse.matrix), P = new T.Matrix4().fromArray(view.projectionMatrix);
-    const hfov = 2 * Math.atan(1 / P.elements[0]) * R2D;
-    const now = performance.now(), items = [];
-    let slot = { left: 0, right: 0 };
-    for (const [id, rec] of S.alerts) {
-      if (!rec.obj) continue;
-      const age = now - rec.born;
-      if (age > rec.ttl) { removeAlert(id); continue; }
-      // face the viewer, pop in, pulse, fade out
-      rec.obj.lookAt(pos.x, rec.obj.position.y, pos.z);
-      rec.card.scale.setScalar(0.4 + 0.6 * easeBack(age / 450));
-      const fade = age > rec.ttl - FADE_MS ? Math.max(0, (rec.ttl - age) / FADE_MS) : 1;
-      rec.card.material.opacity = fade;
-      const rp = (age % 900) / 900, pinging = age < 2700;
-      rec.ring.visible = pinging; rec.ring.scale.set(1.35 + rp * 1.4, 0.55 + rp * 0.9, 1); rec.ring.material.opacity = (1 - rp) * 0.9 * fade;
-      // where is it relative to the view?
-      const d = rec.obj.position.clone().sub(pos);
-      const rel = Math.atan2(d.dot(right), d.x * fwd.x + d.z * fwd.z) * R2D;
-      const c = rec.obj.position.clone().applyMatrix4(V), inFront = c.z < 0; c.applyMatrix4(P);
-      const onScreen = inFront && Math.abs(c.x) < 0.92 && Math.abs(c.y) < 1;
-      items.push({ rec, rel, onScreen });
-      if (!S.domHints) hint3d(rec, rel, onScreen, slot, fade);
-    }
-    if (S.domHints) updateHud(items, hfov);
+    xr.head.position.set(p.x, p.y, p.z); xr.head.quaternion.set(o.x, o.y, o.z, o.w);
+    // heading = where you face, clockwise from where the session started (-Z ahead, +X right)
+    const f = new T.Vector3(0, 0, -1).applyQuaternion(xr.head.quaternion);
+    if (Math.hypot(f.x, f.z) > 0.2) S.heading = Math.atan2(f.x, -f.z) * R2D;   // looking straight up or down: keep the last one
+    const now = performance.now();
+    if (S.domOverlay) halo.draw(now, S.heading, 2 * Math.atan(1 / pose.views[0].projectionMatrix[0]) * R2D);
+    else { halo.draw(now, S.heading, QUEST_FOV); xr.tex.needsUpdate = true; }
   }
   xr.renderer.render(xr.scene, xr.camera);
-}
-
-// Quest has no DOM overlay, so out-of-view hints are small arrows fixed to your view.
-function hint3d(rec, rel, onScreen, slot, fade) {
-  const T = xr.THREE;
-  if (onScreen) { if (rec.hint3d) rec.hint3d.visible = false; return; }
-  const side = rel > 0 ? 'right' : 'left';
-  if (!rec.hint3d || rec.hintSide !== side) {
-    if (rec.hint3d) { xr.head.remove(rec.hint3d); rec.hint3d.material.map.dispose(); rec.hint3d.material.dispose(); }
-    const tex = new T.CanvasTexture(drawHint(rec.a, side)); tex.colorSpace = T.SRGBColorSpace;
-    rec.hint3d = new T.Mesh(new T.PlaneGeometry(0.22, 0.11), new T.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false }));
-    rec.hint3d.renderOrder = 20; rec.hintSide = side; xr.head.add(rec.hint3d);
-  }
-  const back = Math.abs(rel) > 135, i = slot[side]++;
-  rec.hint3d.visible = true;
-  rec.hint3d.position.set(side === 'right' ? 0.34 : -0.34, 0.05 - i * 0.13, -1);
-  const s = back ? 1 + 0.12 * Math.sin(performance.now() / 160) : 1;
-  rec.hint3d.scale.setScalar(s); rec.hint3d.material.opacity = fade;
-}
-
-function drawHint(a, side) {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
-  const g = c.getContext('2d');
-  g.beginPath(); g.roundRect(6, 6, 244, 116, 58); g.fillStyle = 'rgba(12,16,22,.88)'; g.fill();
-  g.lineWidth = 6; g.strokeStyle = a.color; g.stroke();
-  g.fillStyle = a.color; g.beginPath();
-  if (side === 'right') { g.moveTo(222, 64); g.lineTo(186, 34); g.lineTo(186, 94); } else { g.moveTo(34, 64); g.lineTo(70, 34); g.lineTo(70, 94); }
-  g.fill();
-  g.font = '64px "Noto Color Emoji","Apple Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(a.icon, 128, 68);
-  return c;
 }
 </script>
 </body>
