@@ -42,7 +42,9 @@ class EventFilter {
       st.end = end;
       events.push({ key, score, fresh });
     }
-    return events;
+    // a general sound gives way to a more specific one heard with it (see `yields` in common.js)
+    const on = (k) => (this.state.get(k)?.end ?? -1e9) >= start - 1500;
+    return events.filter(e => !SOUNDS[e.key].hear.yields?.some(on));
   }
 }
 

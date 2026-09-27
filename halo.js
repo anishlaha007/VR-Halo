@@ -18,8 +18,10 @@
 //   freq   0–1  a few broad swells (low pitch) → many tight ripples (high pitch)
 //   flow   0–1  separate bumps → one continuous band
 //   blob   0–1  size of the bump that marks the exact direction
-//   beat        rhythm it breathes with: breathe, alarm, wail, honk, blast, ring, rumble, chime, crackle
-//   bars        speech: a row of bars either side of the marker, like a voice waveform
+//   beat        rhythm it breathes with, drawn from the sound itself (see BEATS): the alarm's three beeps,
+//               the siren's wail, a knock's three raps, a dog's woof-woof, the tick of a clock…
+//   bars        a voice: a row of bars either side of the marker, like a voice waveform (with a beat, the
+//               bars follow it: a shout's bursts, a song's long notes)
 //   hazard      bigger surge on arrival
 //   omni        no single source (ambient): a soft band around the whole edge, fuller on its side
 // A sound's `icon` (icons.js) sits upright inside the marker, which grows into a dome big enough to hold it.
@@ -27,7 +29,7 @@
 // A sound that was heard but not located (the microphone listener knows what, not where) has no side to
 // grow from: its ripples circle the whole edge instead, and a chip above the bottom edge names it.
 import { wrap } from '/common.js';
-import { iconPath } from '/icons.js';
+import { icon } from '/icons.js';
 
 const D2R = Math.PI / 180;
 const FADE = 900;                     // ms a wave takes to sink back into the edge
@@ -68,7 +70,54 @@ const BEATS = {
   chime: (t) => { const c = t % 2.8; return 0.42 + 0.7 * sstep(0, 0.03, c) * Math.max(Math.exp(-c * 2.6), c > 0.55 ? 0.85 * Math.exp(-(c - 0.55) * 2.6) : 0); },
   crackle: (t, s) => 0.6 + 0.4 * noise(t * 6, s),
   speech: (t, s) => noise(t * 4.6, s) * sstep(0.28, 0.5, noise(t * 0.6, s + 7)),   // syllables, with pauses between phrases
+  // one-offs and patterns: `hits` makes sharp raps that die away, at these times (s) in a cycle this long
+  knock: hits(2.6, [0, 0.24, 0.48], 14),
+  hit: (t, s) => { const c = t % 5; return 0.45 + 0.8 * Math.exp(-c * 2.2) + 0.12 * noise(t * 9, s) * Math.exp(-c); },   // an impact, then debris
+  shatter: (t, s) => { const c = t % 4; return 0.45 + 0.75 * Math.exp(-c * 5) + 0.3 * noise(t * 16, s) * Math.exp(-c * 1.1); },   // a crack, then tinkling
+  scream: (t) => { const c = t % 3; return 0.5 + 0.7 * sstep(0, 0.12, c) * (1 - sstep(1.5, 2, c)) * (0.9 + 0.1 * Math.sin(t * 38)); },
+  beep: (t) => { const c = t % 1.2; return 0.45 + 0.7 * sstep(0, 0.02, c) * (1 - sstep(0.5, 0.52, c)); },               // reversing: slow and even
+  beeps: hits(2.4, [0, 0.25, 0.5, 0.75], 9),                                                                               // a timer: four quick beeps
+  squeal: (t, s) => { const c = t % 4; return 0.5 + 0.7 * sstep(0, 0.05, c) * (1 - sstep(1.2, 1.8, c)) * (0.85 + 0.15 * noise(t * 20, s)); },
+  clack: hits(1.1, [0, 0.18], 10, 0.7, 0.35),                                                                               // a train's da-dum on the rails
+  engine: (t) => { const c = t % 5, x = (c - 2) / 0.9; return 0.55 + 0.6 * Math.exp(-x * x); },                            // a car passing
+  rev: (t) => { const c = t % 2.2; return 0.6 + 0.55 * sstep(0, 0.3, c) * (1 - sstep(0.5, 1.4, c)) + 0.05 * Math.sin(t * 40); },
+  cry: (t) => { const c = t % 1.8; return 0.5 + 0.65 * sstep(0, 0.2, c) * (1 - sstep(1, 1.4, c)) * (0.9 + 0.1 * Math.sin(t * 12)); },   // waah… waah…
+  shout: (t, s) => { const c = t % 2.5; return 0.45 + 0.75 * sstep(0, 0.08, c) * (1 - sstep(0.6, 0.9, c)) * (0.8 + 0.2 * noise(t * 7, s)); },
+  laugh: (t) => { const c = t % 2.2; return 0.5 + 0.6 * (1 - sstep(1.2, 1.5, c)) * Math.abs(Math.sin(t * Math.PI * 5)) ** 1.5; },   // ha-ha-ha
+  clap: (t, s) => 0.75 + 0.3 * noise(t * 10, s),
+  cheer: (t, s) => { const c = t % 6; return 0.6 + 0.45 * sstep(0, 1.2, c) * (1 - sstep(3.5, 5.5, c)) + 0.1 * noise(t * 5, s); },
+  sing: (t) => 0.8 + 0.25 * Math.sin(t * 2.8) + 0.05 * Math.sin(t * 34),                                                  // long notes, with vibrato
+  whistle: (t) => { const c = t % 0.9; return 0.7 + 0.35 * sstep(0, 0.05, c) * (1 - sstep(0.6, 0.85, c)); },
+  cough: hits(3, [0, 0.35], 7),
+  steps: hits(0.55, [0], 12, 0.5, 0.6),
+  kids: (t, s) => 0.6 + 0.5 * noise(t * 5, s) * sstep(0.2, 0.5, noise(t * 0.8, s + 3)),
+  ringring: (t) => { const c = t % 3, on = Math.max(sstep(0, 0.02, c) * (1 - sstep(0.4, 0.42, c)), sstep(0.6, 0.62, c) * (1 - sstep(1, 1.02, c))); return 0.45 + 0.7 * on * (0.85 + 0.15 * Math.sin(t * 80)); },   // ring-ring… ring-ring
+  creak: (t) => { const c = t % 4; return 0.45 + 0.4 * sstep(0, 0.4, c) * (1 - sstep(1.1, 1.4, c)) + (c > 1.5 ? 0.75 * Math.exp(-(c - 1.5) * 6) : 0); },   // creaks open, bangs shut
+  boil: (t, s) => 0.6 + 0.3 * sstep(0, 4, t % 8) + 0.2 * noise(t * 10, s),
+  flow: (t, s) => 0.85 + 0.1 * Math.sin(t * 1.7) + 0.08 * noise(t * 3, s),
+  flush: (t, s) => { const c = t % 6; return 0.5 + 0.7 * sstep(0, 0.3, c) * (1 - sstep(2, 4, c)) * (0.85 + 0.15 * noise(t * 8, s)); },
+  clink: hits(1.7, [0, 0.4, 0.55, 1.1], 12),
+  jingle: (t, s) => 0.6 + 0.5 * noise(t * 16, s) * (1 - sstep(1.2, 1.6, t % 3)),
+  type: (t, s) => 0.55 + 0.5 * noise(t * 14, s) ** 2,
+  patter: (t, s) => 0.8 + 0.25 * noise(t * 9, s),
+  swell: (t) => { const c = t % 6.5; return 0.55 + 0.6 * sstep(0, 2.2, c) * (1 - sstep(2.8, 5.5, c)); },                 // a wave rolls in and draws back
+  gust: (t, s) => 0.6 + 0.55 * noise(t * 0.7, s) ** 1.5,
+  chirp: hits(1.6, [0, 0.15, 0.3], 18),
+  pulse: (t) => { const c = t % 1.2; return 0.5 + 0.55 * (1 - sstep(0.45, 0.55, c)) * (0.6 + 0.4 * Math.abs(Math.sin(t * Math.PI * 28))); },   // a cricket's trill
+  bark: hits(2.6, [0, 0.35], 9),
+  meow: (t) => { const c = t % 3.5; return 0.45 + 0.7 * sstep(0, 0.15, c) * (1 - sstep(0.6, 1, c)); },
+  melody: (t) => 0.7 + 0.3 * Math.exp(-(t % 0.5) * 6) + 0.1 * Math.sin(t * 0.9),                                           // on the beat
+  thunder: (t, s) => { const c = t % 8; return 0.5 + 0.7 * Math.exp(-c * 3) + 0.35 * sstep(0.2, 0.8, c) * (1 - sstep(2, 5, c)) * noise(t * 3, s); },
+  drone: (t) => 0.65 + 0.45 * Math.sin(Math.PI * (t % 10) / 10) ** 2,                                                    // a plane overhead
+  hum: (t) => 0.92 + 0.06 * Math.sin(t * 1.3),
+  slosh: (t) => 0.75 + 0.3 * Math.max(0, Math.sin(t * 1.9)),
+  snore: (t) => { const c = t % 4.2; return 0.45 + 0.7 * sstep(0, 1.2, c) * (1 - sstep(1.6, 2, c)) + 0.15 * sstep(2.2, 2.6, c) * (1 - sstep(3.2, 3.8, c)); },
+  tick: hits(2, [0, 1], 16, 0.6, 0.45),                                                                                    // tick… tock…
 };
+// Raps at `at` seconds into each `cycle`-second loop, each dying away at `decay`/s, from `base` up by `amp`.
+function hits(cycle, at, decay, base = 0.45, amp = 0.75) {
+  return (t) => { const c = t % cycle; let b = 0; for (const s of at) if (c >= s) b = Math.max(b, Math.exp(-(c - s) * decay)); return base + amp * b; };
+}
 
 // The screen edge as a loop, measured in px along the edge.
 // u = 0 is the bottom centre, positive u runs right and up the right side, ±half is the top centre.
@@ -142,14 +191,15 @@ export class Halo {
     }
     const v = {
       key: a.key, form: f, yaw: a.yaw, around, size, sz: size, label: a.label || a.key, live: a.live || null,
-      c1: rgb(a.color), c2: rgb(a.core || a.color), icon: iconPath(a.icon), born: now, end: now + ttl, fadeLen: FADE,
+      c1: rgb(a.color), c2: rgb(a.core || a.color), icon: icon(a.icon), born: now, end: now + ttl, fadeLen: FADE,
       kick: 0, sweep: a.alert ? now : 0, seed: Math.random() * 100, u: null, vel: 0, dots: [], acc: 0,
     };
     this.voices.push(v);
     return v;
   }
 
-  clear(now = performance.now()) { for (const v of this.voices) if (v.end > now + 450) { v.end = now + 450; v.fadeLen = 450; } }
+  // Every sound sinks away, or only those with this key.
+  clear(now = performance.now(), key = null) { for (const v of this.voices) if (v.end > now + 450 && (key == null || v.key === key)) { v.end = now + 450; v.fadeLen = 450; } }
 
   fit() {
     const [W, H] = this.size || [innerWidth, innerHeight];
@@ -162,7 +212,9 @@ export class Halo {
   }
 
   // heading = where you're looking (same degrees as yaw); fov = horizontal field of view on screen.
-  draw(now, heading = 0, fov = 60) {
+  // project(v) (optional) says where on screen a sound came from, { x, y } in px, or null when that's not in
+  // view; the display knows the camera. Then a beacon marks the spot, as well as the wave on the edge.
+  draw(now, heading = 0, fov = 60, project = null) {
     this.fit();
     const { g, dpr, W, H } = this, dt = this.last ? clamp((now - this.last) / 1000, 0, 0.05) : 0;
     this.last = now;
@@ -173,6 +225,11 @@ export class Halo {
     const heard = this.voices.filter(v => v.around);
     if (heard.length) this.vignette(heard);
     for (const v of this.voices) if (!v.form.omni && !v.around) this.scrim(v);
+    if (project) for (const v of this.voices) {
+      if (v.form.omni || v.around || v.k.alpha < 0.01) continue;
+      const pt = project(v);
+      if (pt) this.beacon(v, pt);
+    }
     g.globalCompositeOperation = 'screen';                         // overlapping sounds mix their colours
     for (const v of this.voices) {
       if (v.form.omni) { this.omni(v); continue; }
@@ -356,7 +413,7 @@ export class Halo {
     const up = Math.max(k.bh * 0.46, size * 0.55), cx = p.x + p.nx * up, cy = p.y + p.ny * up;
     g.globalCompositeOperation = 'source-over';
     g.save(); g.translate(cx - size / 2, cy - size / 2); g.scale(size / 24, size / 24);
-    g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92 * k.alpha); g.fill(v.icon, 'evenodd');
+    g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92 * k.alpha); g.fill(v.icon.path, v.icon.rule);
     g.restore();
     g.globalCompositeOperation = 'screen';
   }
@@ -366,7 +423,8 @@ export class Halo {
   // Heard but not located: bars all the way round, a voice waveform wrapped round the frame.
   // With a live loudness the bars move with the actual voice.
   speech(v) {
-    const { g, rim, p, U, W, H, dpr } = this, k = v.k, E = v.live ? v.live() : BEATS.speech(k.t, v.seed);
+    const { g, rim, p, U, W, H, dpr } = this, k = v.k, beat = BEATS[v.form.beat];
+    const E = v.live ? v.live() : beat ? clamp((beat(k.t, v.seed) - 0.4) / 0.8, 0, 1) : BEATS.speech(k.t, v.seed);
     const gap = clamp(U * 0.026, 7, 15), w = gap * 0.5, base = w / 2 + 2, bars = [];
     const lv = (i, side) => 0.1 + 0.9 * E * (0.3 + 0.7 * noise(k.t * 8.5 + i * 1.93, v.seed + i * 3 + (side < 0 ? 40 : 0)));
     if (v.around) {
@@ -439,6 +497,78 @@ export class Halo {
     }
   }
 
+  // Where the sound came from, while that's in view: a soft glow in its colours (soft because the place is
+  // approximate), its ripples spreading out in its own form (spiky or round, dotted or solid; a voice's bars
+  // around it), its icon in a dome at the heart and its name below. It fades near the edge of the screen,
+  // where the wave takes over.
+  beacon(v, pt) {
+    const { g, W, H, U, dpr } = this, k = v.k, f = v.form;
+    const a = k.alpha * sstep(0, U * 0.14, Math.min(pt.x, W - pt.x, pt.y, H - pt.y));
+    const pop = clamp(k.life, 0, 1.25);
+    if (a < 0.01 || pop < 0.02) return;
+    const beat = f.bars ? clamp((BEATS[f.beat] || ((t, s) => 0.4 + 0.8 * BEATS.speech(t, s)))(k.t, v.seed), 0.4, 1.2) : clamp(k.level, 0.4, 1.3);
+    const r = clamp(U * 0.036, 13, 22) * pop, R = r * (2.6 + 0.8 * beat);
+    const { x, y } = pt;
+    g.globalCompositeOperation = 'screen';
+    let gr = g.createRadialGradient(x, y, 0, x, y, R);
+    gr.addColorStop(0, rgba(v.c2, 0.42 * a)); gr.addColorStop(0.3, rgba(v.c1, 0.24 * a)); gr.addColorStop(1, rgba(v.c1, 0));
+    g.fillStyle = gr; g.fillRect(x - R, y - R, 2 * R, 2 * R);
+
+    g.lineCap = 'round';
+    if (f.bars) {                                                    // a voice: a ring of bars that talk
+      const n = 18, E = clamp((beat - 0.4) / 0.8, 0, 1);
+      g.beginPath();
+      for (let i = 0; i < n; i++) {
+        const th = i / n * 2 * Math.PI, l = r * (0.25 + 1.1 * E * (0.3 + 0.7 * noise(k.t * 8.5 + i * 1.93, v.seed + i * 3)));
+        const r0 = r * 1.35;
+        g.moveTo(x + Math.cos(th) * r0, y + Math.sin(th) * r0); g.lineTo(x + Math.cos(th) * (r0 + l), y + Math.sin(th) * (r0 + l));
+      }
+      g.lineWidth = Math.max(2, r * 0.18); g.strokeStyle = rgba(v.c1, 0.9 * a); g.stroke();
+    } else {                                                         // ripples leaving the source
+      const n = Math.round(5 + 9 * (f.freq ?? 0.5)), grain = f.grain || 0, amp = 0.05 + 0.14 * (f.sharp || 0);
+      for (let j = 0; j < 3; j++) {
+        const q = (k.t * (0.3 + 0.35 * k.speed) + j / 3 + v.seed) % 1, rr = r * (1.25 + 1.9 * q), ra = a * (1 - q) ** 2 * 0.8;
+        if (ra < 0.01) continue;
+        const pts = [], N = 90;
+        for (let i = 0; i < N; i++) {
+          const th = i / N * 2 * Math.PI, fr = (th / (2 * Math.PI) * n + v.seed + j * 0.37) % 1;
+          const round = Math.sin(Math.PI * fr) ** 0.55, tri = 1 - Math.abs(2 * fr - 1), b = round + (tri * tri - round) * (f.sharp || 0);
+          const rad = rr * (1 + amp * (b - 0.5) * 2);
+          pts.push([x + Math.cos(th) * rad, y + Math.sin(th) * rad]);
+        }
+        if (grain > 0.35) {                                          // dotted sounds ripple as dots
+          g.fillStyle = rgba(j % 2 ? v.c1 : v.c2, ra);
+          const step = Math.max(2, Math.round(6 - 4 * grain));
+          for (let i = 0; i < N; i += step) { g.beginPath(); g.arc(pts[i][0], pts[i][1], Math.max(1.2, r * 0.09), 0, 7); g.fill(); }
+        } else {
+          g.beginPath(); for (const [px, py] of pts) g.lineTo(px, py); g.closePath();
+          g.lineWidth = Math.max(1.2, r * 0.1 * (1 - q)); g.strokeStyle = rgba(j ? v.c1 : v.c2, ra); g.stroke();
+        }
+      }
+    }
+
+    g.globalCompositeOperation = 'source-over';
+    const rb = r * (1 + (v.kick ? 0.25 * Math.exp(-(performance.now() - v.kick) / 280) : 0));
+    gr = g.createRadialGradient(x, y + rb, 0, x, y, rb * 1.6);
+    gr.addColorStop(0, rgba(v.c2, a)); gr.addColorStop(0.65, rgba(v.c1, a));
+    g.beginPath(); g.arc(x, y, rb, 0, 7); g.fillStyle = gr;
+    g.shadowColor = rgba(v.c1, 0.8 * a); g.shadowBlur = 14 * dpr; g.fill(); g.shadowBlur = 0;
+    if (v.icon) {
+      const s = rb * 1.3;
+      g.save(); g.translate(x - s / 2, y - s / 2); g.scale(s / 24, s / 24);
+      g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92 * a); g.fill(v.icon.path, v.icon.rule);
+      g.restore();
+    }
+    if (v.label && pop > 0.6) {
+      g.font = `600 ${clamp(U * 0.03, 11, 14).toFixed(1)}px ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif`;
+      g.textAlign = 'center'; g.textBaseline = 'top';
+      g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 6 * dpr;
+      const tw = g.measureText(v.label).width;                     // kept on screen when the source is near an edge
+      g.fillStyle = `rgba(255,244,236,${(0.92 * a).toFixed(3)})`; g.fillText(v.label, clamp(x, tw / 2 + 8, W - tw / 2 - 8), y + R * 0.62 + 4);
+      g.shadowBlur = 0;
+    }
+  }
+
   // A chip for each sound heard but not located, centred just above the bottom edge: its icon in a dome of
   // its colours, and its name, since there's no direction to show. Icons only if the names don't fit.
   captions(list) {
@@ -458,8 +588,8 @@ export class Halo {
       if (k.alpha > 0.01 && sc > 0.02) {
         g.save(); g.translate(x + w / 2, y); g.scale(sc, sc); g.globalAlpha = clamp(k.alpha, 0, 1);
         g.beginPath(); g.roundRect(-w / 2, -hgt / 2, w, hgt, hgt / 2);
-        g.fillStyle = 'rgba(12,10,24,.74)'; g.fill();
-        g.lineWidth = 1; g.strokeStyle = 'rgba(243,240,255,.14)'; g.stroke();
+        g.fillStyle = 'rgba(24,11,14,.76)'; g.fill();
+        g.lineWidth = 1; g.strokeStyle = 'rgba(255,243,234,.14)'; g.stroke();
         const bx = -w / 2 + hgt / 2, gr = g.createRadialGradient(bx, r, 0, bx, 0, r * 1.6);
         gr.addColorStop(0, rgba(v.c2, 1)); gr.addColorStop(0.65, rgba(v.c1, 1));
         g.beginPath(); g.arc(bx, 0, r, 0, 7); g.fillStyle = gr;
@@ -467,10 +597,10 @@ export class Halo {
         if (v.icon) {
           const s = r * 1.3;
           g.save(); g.translate(bx - s / 2, -s / 2); g.scale(s / 24, s / 24);
-          g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92); g.fill(v.icon, 'evenodd');
+          g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92); g.fill(v.icon.path, v.icon.rule);
           g.restore();
         }
-        if (named) { g.fillStyle = '#f3f0ff'; g.fillText(v.label, bx + r + 8, 1); }
+        if (named) { g.fillStyle = '#fff3ea'; g.fillText(v.label, bx + r + 8, 1); }
         g.restore();
       }
       x += w + gap;

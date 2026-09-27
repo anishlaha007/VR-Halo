@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sound AR demo hub. Runs on the laptop.
+Synesthesia hub. Runs on the laptop.
 
 Every other device connects here. Nothing talks to anything else directly.
 
@@ -15,7 +15,8 @@ Setup:
 
 Send an alert from any script or terminal:
     curl -X POST http://localhost:8000/alert -d '{"sound":"fire","angle":180}'
-    (angle: 0 = ahead, 90 = right, -90 = left, 180 = behind; optional level: 0-1 loudness)
+    (angle: 0 = ahead, 90 = right, -90 = left, 180 = behind, null = all around / unknown;
+     optional level: 0-1 loudness; sound: any key in common.js)
 """
 import argparse
 import asyncio
@@ -34,7 +35,7 @@ from aiohttp import WSMsgType, web
 HERE = os.path.dirname(os.path.abspath(__file__))
 # Older Pythons (like the one on macOS) may not know these, and browsers refuse modules and wasm served
 # as anything else. Newer aiohttp keeps its own table, so tell both.
-TYPES = {".mjs": "text/javascript", ".wasm": "application/wasm", ".tflite": "application/octet-stream"}
+TYPES = {".mjs": "text/javascript", ".wasm": "application/wasm", ".tflite": "application/octet-stream", ".woff2": "font/woff2"}
 for ext, kind in TYPES.items():
     mimetypes.add_type(kind, ext)
     try:
@@ -68,22 +69,32 @@ def wrap_angle(a: float) -> float:
 
 def make_alert(src: dict, source: str) -> dict:
     """Clean up an incoming alert so every display receives the same shape."""
+    raw = src.get("angle", 180)
+    if raw is None or raw == "" or raw == "null":   # heard, but from no one direction (ambience, a crowd)
+        angle = None
+    else:
+        try:
+            angle = round(wrap_angle(float(raw)), 1)
+        except (TypeError, ValueError):
+            angle = 180.0
     try:
-        angle = float(src.get("angle", 180))
+        ttl = min(60000, max(500, int(src.get("ttl", 6000))))
     except (TypeError, ValueError):
-        angle = 180.0
+        ttl = 6000
     alert = {
         "type": "alert",
         "id": next(IDS),
         "sound": str(src.get("sound", ""))[:32],
-        "angle": round(wrap_angle(angle), 1),
-        "ttl": int(src.get("ttl", 6000)),
+        "angle": angle,
+        "ttl": ttl,
         "source": source,
         "ts": int(time.time() * 1000),
     }
     for k in ("label", "icon", "color", "cid"):   # optional overrides; display fills in the rest
         if src.get(k):
             alert[k] = str(src[k])[:40]
+    if src.get("hold"):                             # keeps a sound that's still going alive, without a new pulse
+        alert["hold"] = True
     try:                                            # optional loudness 0-1: sets how big the wave is
         if src.get("level") is not None:
             alert["level"] = round(min(1.0, max(0.0, float(src["level"]))), 3)
@@ -113,9 +124,16 @@ async def broadcast(msg: dict, exclude=None) -> None:
 
 
 def log_alert(a: dict) -> None:
-    side = "behind" if abs(a["angle"]) > 135 else "right" if a["angle"] > 45 else "left" if a["angle"] < -45 else "ahead"
+    if a.get("hold"):
+        return                                      # an ambience refreshing itself: logged when it started
+    ang = a["angle"]
+    if ang is None:
+        where, side = "", "all around"
+    else:
+        where = f"{ang:>7.1f}°"
+        side = "behind" if abs(ang) > 135 else "right" if ang > 45 else "left" if ang < -45 else "ahead"
     name = a.get("label") or a["sound"] or "sound"
-    print(f"  alert #{a['id']:<4} {name:<14} {a['angle']:>7.1f}°  ({side})  from {a['source']}  -> {counts()['displays']} display(s)")
+    print(f"  alert #{a['id']:<4} {name:<16} {where:>8}  ({side})  from {a['source']}  -> {counts()['displays']} display(s)")
 
 
 # ---------- handlers ----------
@@ -135,9 +153,10 @@ async def handle(data: dict, role: str) -> None:
         a = make_alert(data, source=role)
         log_alert(a)
         await broadcast(a)            # sender gets it too, as delivery confirmation
-    elif kind == "clear":
-        print("  clear all")
-        await broadcast({"type": "clear"})
+    elif kind == "clear":                 # everything, or one sound (an ambience switched off)
+        sound = str(data.get("sound") or "")[:32]
+        print(f"  clear {sound or 'all'}")
+        await broadcast({"type": "clear", "sound": sound} if sound else {"type": "clear"})
     elif kind == "sound":             # your existing stereo-mic detector page
         if data.get("zone") == "behind" and time.time() - LAST_MIC_ALERT > MIC_COOLDOWN_S:
             LAST_MIC_ALERT = time.time()
@@ -234,19 +253,22 @@ def page(name: str):
 
 async def index(request: web.Request) -> web.Response:
     base = f"{request.scheme}://{request.host}"
-    links = [("remote", "Tap remote — pick a sound, tap a direction"),
+    links = [("remote", "Remote — pick a sound, tap a direction; it plays on the phone too"),
              ("display", "AR display — Android, iPhone, Quest or laptop preview")]
     if os.path.exists(os.path.join(HERE, "mic.html")):
         links.append(("mic", "Stereo mic detector — real sounds from behind"))
-    links.append(("forms", "Forms — every sound's wave side by side"))
+    links.append(("forms", "Forms — every sound's wave side by side, and how it sounds"))
     items = "".join(f'<a href="/{p}"><b>/{p}</b><span>{d}</span></a>' for p, d in links)
     html = f"""<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Sound AR hub</title><style>
-body{{margin:0;background:#0b0e13;color:#e8ecf1;font:16px/1.4 system-ui,sans-serif;padding:24px 16px;max-width:520px;margin:auto}}
-a{{display:block;background:#161b23;border-radius:14px;padding:16px;margin:10px 0;color:inherit;text-decoration:none}}
-b{{display:block;font-size:19px;color:#7fb2ff}} span{{color:#8b95a3;font-size:14px}} code{{color:#8b95a3}}
-</style><h1>Sound AR hub</h1><p>Open these on each device:</p>{items}
-<p><code>{base}</code></p>"""
+<title>Synesthesia hub</title><link rel="stylesheet" href="/brand.css"><style>
+body{{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 var(--font)}}
+main{{position:relative;z-index:1;padding:32px 16px;max-width:520px;margin:auto}}
+h1{{font-size:34px;margin:0 0 6px}} p{{color:var(--mut)}}
+a{{display:block;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:16px;margin:10px 0;color:inherit;text-decoration:none;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}}
+b{{display:block;font-size:19px;color:#ffb3c8}} span{{color:var(--mut);font-size:14px}} code{{color:var(--dim)}}
+</style><div class="backdrop"><i class="s1"></i><i class="s2"></i><i class="s3"></i></div>
+<main><h1 class="wordmark">SYNESTHESIA</h1><p>Open these on each device:</p>{items}
+<p><code>{base}</code></p></main>"""
     return web.Response(text=html, content_type="text/html")
 
 
@@ -289,12 +311,14 @@ def main() -> None:
     app.router.add_get("/halo.js", page("halo.js"))
     app.router.add_get("/icons.js", page("icons.js"))
     app.router.add_get("/listen.js", page("listen.js"))
+    app.router.add_get("/sfx.js", page("sfx.js"))
+    app.router.add_get("/brand.css", page("brand.css"))
     app.router.add_static("/vendor", os.path.join(HERE, "vendor"))
 
     ip = lan_ip()
     ctx = self_signed_ctx(ip) if args.https else None
     scheme = "https" if ctx else "http"
-    print("\n  Sound AR hub is running\n")
+    print("\n  Synesthesia hub is running\n")
     print(f"  Remote   (tap phone)  : {scheme}://{ip}:{args.port}/remote")
     print(f"  Display  (AR phone)   : {scheme}://{ip}:{args.port}/display")
     print(f"  Laptop preview        : {scheme}://localhost:{args.port}/display")
