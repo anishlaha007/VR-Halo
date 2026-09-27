@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Behind-You Sound Test</title>
+<style>
+:root{--bg:#0e1116;--card:#171b22;--fg:#e8ecf1;--mut:#8b95a3;--ok:#3ecf8e;--warn:#f5a524;--bad:#ff4d4f;--acc:#5b9dff;--line:#2a313c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px 16px 48px;max-width:640px;margin-inline:auto}
+h1{font-size:21px;margin:0 0 2px}
+h2{font-size:15px;margin:0 0 8px;color:var(--fg)}
+.sub{color:var(--mut);font-size:13px;margin-bottom:14px}
+.card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px 14px;font-size:15px;font-weight:600;cursor:pointer}
+button.sec{background:var(--line)}
+button:disabled{opacity:.4}
+.big{font-size:38px;font-weight:800;text-align:center;padding:18px 0;border-radius:12px;background:#11151b;transition:background .15s;letter-spacing:.5px}
+.big.behind{background:var(--bad);color:#fff}
+.big.middle{background:#1d2a22;color:var(--ok)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin-top:8px}
+.kv b{color:var(--mut);font-weight:500}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;background:var(--line);color:var(--mut)}
+.pill.good{background:#123d2b;color:var(--ok)} .pill.bad{background:#44191a;color:var(--bad)} .pill.warn{background:#43310f;color:var(--warn)}
+.mrow{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;color:var(--mut)}
+.meter{height:12px;background:#0b0e12;border-radius:6px;overflow:hidden;flex:1}
+.meter>div{height:100%;width:0;background:var(--ok)}
+label{font-size:13px;color:var(--mut);display:block;margin-top:10px}
+input[type=range]{width:100%}
+input[type=text]{width:100%;padding:10px;border-radius:8px;border:1px solid var(--line);background:#0b0e12;color:var(--fg);font-size:14px}
+canvas{width:100%;height:110px;display:block;background:#0b0e12;border-radius:8px;margin-top:10px}
+#log{font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--mut);max-height:200px;overflow:auto;white-space:pre;margin-top:6px}
+#flash{position:fixed;inset:0;background:var(--bad);opacity:0;pointer-events:none;transition:opacity .35s}
+.note{font-size:13px;color:var(--mut);margin:6px 0 0}
+.err{color:var(--bad);font-size:14px;margin-top:8px}
+</style>
+</head>
+<body>
+<div id="flash"></div>
+
+<h1>Behind-You Sound Test</h1>
+<div class="sub">Checks whether this phone gives real stereo, then uses the two mics to flag sounds from behind. Everything else counts as "middle".</div>
+
+<div class="card">
+  <button id="start">Start microphone</button>
+  <div id="startErr" class="err"></div>
+</div>
+
+<div class="card">
+  <h2>1 · Stereo check</h2>
+  <div class="kv">
+    <b>Channels reported</b><span id="chRep">–</span>
+    <b>Sample rate</b><span id="sr">–</span>
+    <b>Mic</b><span id="micLabel">–</span>
+    <b>Verdict</b><span><span id="verdict" class="pill">waiting</span></span>
+  </div>
+  <div class="mrow">L <div class="meter"><div id="mL"></div></div><span id="dbL" style="width:52px;text-align:right">–</span></div>
+  <div class="mrow">R <div class="meter"><div id="mR"></div></div><span id="dbR" style="width:52px;text-align:right">–</span></div>
+  <p class="note">Tap near the top of the phone, then near the bottom. With real stereo, one bar jumps more than the other each time. If the two bars always move together, the phone is sending mono.</p>
+</div>
+
+<div class="card">
+  <h2>2 · Mount + calibrate</h2>
+  <p class="note" style="margin-top:0">Lay the phone flat on top of the headset with its <b>length pointing forward</b>, so one mic is at the front and one is at the back. Then clap about 1 m away, three times for each button.</p>
+  <div class="row" style="margin-top:10px">
+    <button id="calF" class="sec" disabled>Clap in FRONT ×3</button>
+    <button id="calB" class="sec" disabled>Clap BEHIND ×3</button>
+    <button id="swap" class="sec" disabled>Swap front/back</button>
+  </div>
+  <div class="kv">
+    <b>Status</b><span id="calStatus">not calibrated (using defaults)</span>
+    <b>Front mic</b><span id="frontMic">–</span>
+    <b>Front clap delay</b><span id="tauF">–</span>
+    <b>Behind clap delay</b><span id="tauB">–</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>3 · Live</h2>
+  <div id="zone" class="big">—</div>
+  <div class="kv">
+    <b>Delay (τ)</b><span id="tau">–</span>
+    <b>Front/back score</b><span id="zval">–  <span class="note">(+1 front · 0 side · −1 behind)</span></span>
+    <b>Confidence</b><span id="conf">–</span>
+    <b>Noise floor</b><span id="floor">–</span>
+  </div>
+  <canvas id="cc" width="600" height="110"></canvas>
+  <p class="note">Cross-correlation between the two mics. The peak position is the delay; the dashed lines mark your calibrated front (green) and behind (red) delays.</p>
+</div>
+
+<div class="card">
+  <h2>Settings</h2>
+  <label>Trigger: sound must be <span id="trigV">12</span> dB above the noise floor</label>
+  <input id="trig" type="range" min="4" max="30" step="1" value="12">
+  <label>Behind threshold: score below −<span id="bthV">0.35</span> counts as behind</label>
+  <input id="bth" type="range" min="0.1" max="0.9" step="0.05" value="0.35">
+  <label>Minimum confidence: <span id="mconfV">0.20</span></label>
+  <input id="mconf" type="range" min="0.05" max="0.8" step="0.05" value="0.2">
+  <label><input id="vib" type="checkbox" checked> Vibrate the phone on "behind"</label>
+</div>
+
+<div class="card">
+  <h2>Send to Quest (optional)</h2>
+  <input id="wsurl" type="text" spellcheck="false">
+  <div class="row" style="margin-top:8px">
+    <button id="wsBtn" class="sec">Connect</button>
+    <span id="wsStat" class="pill">off</span>
+  </div>
+  <p class="note">Connects to relay.py on your laptop, which forwards "behind" alerts to the Quest.</p>
+</div>
+
+<div class="card">
+  <h2>Event log</h2>
+  <div id="log"></div>
+</div>
+
+<!-- Pure DSP: no DOM access, so it can be tested on its own -->
+<script id="dsp">
+function makeFFT(n){
+  const levels = Math.round(Math.log2(n));
+  const cos = new Float64Array(n/2), sin = new Float64Array(n/2);
+  for (let i = 0; i < n/2; i++){ cos[i] = Math.cos(2*Math.PI*i/n); sin[i] = Math.sin(2*Math.PI*i/n); }
+  const rev = new Uint32Array(n);
+  for (let i = 0; i < n; i++){ let x = i, r = 0; for (let j = 0; j < levels; j++){ r = (r<<1)|(x&1); x >>= 1; } rev[i] = r; }
+  return function fft(re, im, inverse){
+    for (let i = 0; i < n; i++){ const j = rev[i]; if (j > i){ let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+    for (let size = 2; size <= n; size <<= 1){
+      const half = size >> 1, step = n / size;
+      for (let i = 0; i < n; i += size){
+        for (let j = i, k = 0; j < i + half; j++, k += step){
+          const wr = cos[k], wi = inverse ? sin[k] : -sin[k];
+          const xr = re[j+half]*wr - im[j+half]*wi;
+          const xi = re[j+half]*wi + im[j+half]*wr;
+          re[j+half] = re[j] - xr; im[j+half] = im[j] - xi;
+          re[j] += xr; im[j] += xi;
+        }
+      }
+    }
+    if (inverse){ for (let i = 0; i < n; i++){ re[i] /= n; im[i] /= n; } }
+  };
+}
+
+// B = analysis block length (power of 2). FFT is 2B so the correlation doesn't wrap.
+function makeDSP(B){
+  const N = 2*B, win = new Float64Array(B);
+  for (let i = 0; i < B; i++) win[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(B-1));
+  return { B, N, fft: makeFFT(N), win,
+    xr: new Float64Array(N), xi: new Float64Array(N), yr: new Float64Array(N), yi: new Float64Array(N) };
+}
+
+// GCC-PHAT. Returns lag in samples: POSITIVE => the R channel heard the sound first.
+// peak is normalised to ~[0,1]: 1 = perfectly clean single delay, ~0.05 = noise.
+function gccPhat(D, l, r, maxLag, fs, fLo = 150, fHi = 12000){
+  const { B, N, fft, win, xr, xi, yr, yi } = D;
+  xr.fill(0); xi.fill(0); yr.fill(0); yi.fill(0);
+  for (let i = 0; i < B; i++){ xr[i] = l[i]*win[i]; yr[i] = r[i]*win[i]; }
+  fft(xr, xi, false); fft(yr, yi, false);
+  const kLo = Math.floor(fLo*N/fs), kHi = Math.min(N/2, Math.ceil(fHi*N/fs));
+  let used = 0;
+  for (let k = 0; k < N; k++){
+    const kk = k <= N/2 ? k : N - k;
+    if (kk < kLo || kk > kHi){ xr[k] = 0; xi[k] = 0; continue; }
+    const a = xr[k], b = xi[k], c = yr[k], d = yi[k];
+    const gr = a*c + b*d, gi = b*c - a*d;          // X · conj(Y)
+    const m = Math.sqrt(gr*gr + gi*gi);
+    if (m < 1e-20){ xr[k] = 0; xi[k] = 0; continue; }
+    xr[k] = gr/m; xi[k] = gi/m; used++;             // PHAT: keep phase only
+  }
+  fft(xr, xi, true);
+  const curve = new Float64Array(2*maxLag + 1);
+  let best = -Infinity, bi = 0;
+  for (let k = -maxLag; k <= maxLag; k++){
+    const v = xr[(k + N) % N]; curve[k + maxLag] = v;
+    if (v > best){ best = v; bi = k; }
+  }
+  let frac = 0;
+  if (bi > -maxLag && bi < maxLag){
+    const y0 = curve[bi - 1 + maxLag], y1 = best, y2 = curve[bi + 1 + maxLag];
+    const den = y0 - 2*y1 + y2;
+    if (den < 0) frac = 0.5*(y0 - y2)/den;
+  }
+  const scale = used ? N/used : 0;
+  for (let i = 0; i < curve.length; i++) curve[i] *= scale;
+  return { lag: bi + frac, peak: best*scale, curve };
+}
+
+// score: +1 = straight ahead, 0 = side, -1 = straight behind (it's cos of the angle from the nose)
+function classify(tauUs, frontSign, tauRefUs, behindThr){
+  const z = Math.max(-1.5, Math.min(1.5, frontSign*tauUs/tauRefUs));
+  return { z, zone: z <= -behindThr ? 'behind' : 'middle' };
+}
+</script>
+
+<script>
+const $ = id => document.getElementById(id);
+const C = 343; // speed of sound, m/s
+const S = {
+  B: 2048, fs: 48000, dsp: null, running: false,
+  floor: -60, lastEvent: 0, dbL: -99, dbR: -99,
+  frontSign: 1, tauFront: null, tauBack: null,
+  calib: null, calibBuf: [],
+  identFrames: 0, stereoFrames: 0,
+  trig: 12, behindThr: 0.35, minConf: 0.2, vibrate: true,
+  lastCurve: null, maxLag: 0, ws: null
+};
+
+// ---------- saved calibration (optional, per browser) ----------
+function saveCal(){ try { localStorage.setItem('behindCal', JSON.stringify({ frontSign: S.frontSign, tauFront: S.tauFront, tauBack: S.tauBack })); } catch (e) {} }
+function loadCal(){ try { const c = JSON.parse(localStorage.getItem('behindCal') || 'null'); if (c){ S.frontSign = c.frontSign || 1; S.tauFront = c.tauFront; S.tauBack = c.tauBack; } } catch (e) {} }
+function tauRef(){
+  const v = [S.tauFront, S.tauBack].filter(x => x != null).map(Math.abs).filter(x => x > 30);
+  return v.length ? v.reduce((a, b) => a + b, 0)/v.length : 0.15/C*1e6; // default: 15 cm mic spacing
+}
+
+// ---------- UI helpers ----------
+function log(msg){
+  const t = new Date().toLocaleTimeString([], { hour12: false });
+  const el = $('log'); el.textContent = `${t}  ${msg}\n` + el.textContent.split('\n').slice(0, 60).join('\n');
+}
+function pill(el, text, cls){ el.textContent = text; el.className = 'pill ' + (cls || ''); }
+function fmtUs(us){ return (us >= 0 ? '+' : '') + us.toFixed(0) + ' µs'; }
+function renderCal(){
+  $('frontMic').textContent = S.frontSign > 0 ? 'R channel (R hears front sounds first)' : 'L channel (L hears front sounds first)';
+  $('tauF').textContent = S.tauFront == null ? '–' : fmtUs(S.tauFront);
+  $('tauB').textContent = S.tauBack == null ? '–' : fmtUs(S.tauBack);
+  if (S.tauFront != null || S.tauBack != null) $('calStatus').textContent = `calibrated · full-scale delay ≈ ${tauRef().toFixed(0)} µs (≈ ${(tauRef()*1e-6*C*100).toFixed(1)} cm mic spacing)`;
+}
+
+// ---------- start ----------
+$('wsurl').value = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host || 'localhost:8000'}/ws?role=mic`;
+loadCal(); renderCal();
+
+$('start').onclick = async () => {
+  $('startErr').textContent = '';
+  if (!window.isSecureContext){
+    $('startErr').innerHTML = 'The browser blocks the microphone on this address (not a secure context). Open it via <b>https</b>, <b>http://localhost</b> (adb reverse), or add this address under chrome://flags → "Insecure origins treated as secure".';
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      channelCount: { ideal: 2 }, echoCancellation: false, noiseSuppression: false,
+      autoGainControl: false, sampleRate: { ideal: 48000 } } });
+    const track = stream.getAudioTracks()[0], st = track.getSettings ? track.getSettings() : {};
+    $('chRep').textContent = st.channelCount != null ? st.channelCount : 'not reported by browser';
+    $('micLabel').textContent = track.label || '–';
+    if (st.channelCount === 1) pill($('verdict'), 'MONO — this browser/phone gives one channel', 'bad');
+    else pill($('verdict'), 'listening… make some noise', 'warn');
+
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    await ctx.resume();
+    S.fs = ctx.sampleRate; $('sr').textContent = S.fs + ' Hz';
+    S.dsp = makeDSP(S.B);
+    S.maxLag = Math.ceil(0.25/C*S.fs); // search ±25 cm worth of delay
+    const src = ctx.createMediaStreamSource(stream);
+    const proc = ctx.createScriptProcessor(S.B, 2, 2);
+    const mute = ctx.createGain(); mute.gain.value = 0;
+    src.connect(proc); proc.connect(mute); mute.connect(ctx.destination);
+    proc.onaudioprocess = e => onFrame(e.inputBuffer);
+    S.running = true;
+    $('start').disabled = true; $('start').textContent = 'Microphone running';
+    ['calF', 'calB', 'swap'].forEach(id => $(id).disabled = false);
+    log(`started · ${S.fs} Hz · reported channels: ${st.channelCount ?? '?'}`);
+    requestAnimationFrame(draw);
+  } catch (e) {
+    $('startErr').textContent = 'Could not open the microphone: ' + (e && e.message || e);
+  }
+};
+
+// ---------- audio frames ----------
+function onFrame(buf){
+  const l = buf.getChannelData(0), r = buf.numberOfChannels > 1 ? buf.getChannelData(1) : l;
+  const B = l.length;
+  let sl = 0, sr = 0, sd = 0;
+  for (let i = 0; i < B; i++){ sl += l[i]*l[i]; sr += r[i]*r[i]; const d = l[i] - r[i]; sd += d*d; }
+  S.dbL = 10*Math.log10(sl/B + 1e-12); S.dbR = 10*Math.log10(sr/B + 1e-12);
+  const db = 10*Math.log10((sl + sr)/(2*B) + 1e-12);
+
+  // stereo verdict: are the two channels literally the same signal?
+  if (sl > 1e-8){
+    if (sd < 1e-6*sl) S.identFrames++; else S.stereoFrames++;
+    const n = S.identFrames + S.stereoFrames;
+    if (n > 20){
+      if (S.identFrames/n > 0.9) pill($('verdict'), 'MONO — L and R are identical copies', 'bad');
+      else pill($('verdict'), 'STEREO — two different mic signals ✓', 'good');
+    }
+  }
+
+  const now = performance.now();
+  const loud = db > S.floor + S.trig && db > -70;
+  if (loud && now - S.lastEvent > 150) analyse(l, r, db, now);
+
+  // noise floor: falls quickly, rises slowly (~1 dB/s), ignores loud frames
+  if (db < S.floor) S.floor = 0.7*S.floor + 0.3*db;
+  else if (!loud) S.floor += 0.04;
+}
+
+function analyse(l, r, db, now){
+  const res = gccPhat(S.dsp, l, r, S.maxLag, S.fs);
+  S.lastCurve = res.curve;
+  const tauUs = res.lag/S.fs*1e6;
+  $('tau').textContent = fmtUs(tauUs) + `  (${res.lag.toFixed(1)} samples)`;
+  $('conf').textContent = res.peak.toFixed(2) + (res.peak < S.minConf ? '  — too low, ignored' : '');
+  if (res.peak < S.minConf) return;
+  S.lastEvent = now;
+
+  if (S.calib){ collectCal(tauUs); return; }
+
+  const { z, zone } = classify(tauUs, S.frontSign, tauRef(), S.behindThr);
+  $('zval').firstChild.textContent = z.toFixed(2) + '  ';
+  const zEl = $('zone');
+  zEl.textContent = zone === 'behind' ? 'BEHIND YOU' : 'middle';
+  zEl.className = 'big ' + zone;
+  log(`${zone.toUpperCase().padEnd(6)} τ=${fmtUs(tauUs).padStart(8)} score=${z.toFixed(2).padStart(5)} conf=${res.peak.toFixed(2)} ${db.toFixed(0)}dB`);
+  if (zone === 'behind'){
+    const f = $('flash'); f.style.opacity = 0.55; setTimeout(() => f.style.opacity = 0, 250);
+    if (S.vibrate && navigator.vibrate) navigator.vibrate(150);
+  }
+  send({ type: 'sound', zone, z: +z.toFixed(3), tau_us: +tauUs.toFixed(1), conf: +res.peak.toFixed(3), db: +db.toFixed(1), t: Date.now() });
+}
+
+// ---------- calibration ----------
+function startCal(which){
+  S.calib = which; S.calibBuf = [];
+  $('calStatus').textContent = `listening for 3 claps ${which === 'front' ? 'IN FRONT' : 'BEHIND'}…`;
+}
+function collectCal(tauUs){
+  S.calibBuf.push(tauUs);
+  $('calStatus').textContent = `clap ${S.calibBuf.length}/3 (${fmtUs(tauUs)})`;
+  if (S.calibBuf.length < 3) return;
+  const med = S.calibBuf.slice().sort((a, b) => a - b)[1];
+  const which = S.calib; S.calib = null;
+  if (which === 'front'){
+    S.tauFront = med;
+    if (Math.abs(med) >= 30) S.frontSign = med >= 0 ? 1 : -1;
+    // keep behind sample consistent with new sign
+  } else {
+    S.tauBack = med;
+    if (S.tauFront == null && Math.abs(med) >= 30) S.frontSign = med >= 0 ? -1 : 1;
+  }
+  renderCal(); saveCal();
+  log(`calibrated ${which}: median τ = ${fmtUs(med)}`);
+  if (Math.abs(med) < 30)
+    $('calStatus').textContent = `⚠ ${which} claps gave ~0 delay: the mics aren't on a front-back line. Turn the phone so its length points forward.`;
+  else if (S.tauFront != null && S.tauBack != null && Math.sign(S.tauFront) === Math.sign(S.tauBack))
+    $('calStatus').textContent = '⚠ front and behind gave the SAME sign — check the phone orientation, or clap further away from walls.';
+}
+$('calF').onclick = () => startCal('front');
+$('calB').onclick = () => startCal('back');
+$('swap').onclick = () => { S.frontSign *= -1; renderCal(); saveCal(); log('swapped front/back'); };
+
+// ---------- settings ----------
+function bindRange(id, key, fmt){ const el = $(id), out = $(id + 'V'); const f = () => { S[key] = +el.value; out.textContent = fmt(+el.value); }; el.oninput = f; f(); }
+bindRange('trig', 'trig', v => v.toFixed(0));
+bindRange('bth', 'behindThr', v => v.toFixed(2));
+bindRange('mconf', 'minConf', v => v.toFixed(2));
+$('vib').onchange = e => S.vibrate = e.target.checked;
+
+// ---------- WebSocket to relay ----------
+function send(obj){ if (S.ws && S.ws.readyState === 1) S.ws.send(JSON.stringify(obj)); }
+$('wsBtn').onclick = () => {
+  if (S.ws){ S.ws.close(); S.ws = null; return; }
+  const url = $('wsurl').value.trim();
+  if (location.protocol === 'https:' && url.startsWith('ws:')){ pill($('wsStat'), 'blocked: https page cannot open ws://', 'bad'); return; }
+  try {
+    const ws = new WebSocket(url); S.ws = ws; pill($('wsStat'), 'connecting…', 'warn');
+    ws.onopen = () => { pill($('wsStat'), 'connected', 'good'); $('wsBtn').textContent = 'Disconnect'; send({ type: 'hello' }); };
+    ws.onclose = () => { pill($('wsStat'), 'off'); $('wsBtn').textContent = 'Connect'; if (S.ws === ws) S.ws = null; };
+    ws.onerror = () => pill($('wsStat'), 'error — is relay.py running?', 'bad');
+  } catch (e) { pill($('wsStat'), 'bad URL', 'bad'); }
+};
+
+// ---------- drawing ----------
+function draw(){
+  const pct = db => Math.max(0, Math.min(100, (db + 80)/80*100));
+  $('mL').style.width = pct(S.dbL) + '%'; $('mR').style.width = pct(S.dbR) + '%';
+  $('dbL').textContent = S.dbL.toFixed(0) + ' dB'; $('dbR').textContent = S.dbR.toFixed(0) + ' dB';
+  $('floor').textContent = S.floor.toFixed(0) + ' dB  (trigger at ' + (S.floor + S.trig).toFixed(0) + ' dB)';
+
+  const cv = $('cc'), g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.clearRect(0, 0, W, H);
+  g.strokeStyle = '#2a313c'; g.beginPath(); g.moveTo(W/2, 0); g.lineTo(W/2, H); g.stroke();
+  const c = S.lastCurve;
+  if (c){
+    const n = c.length, x = i => i/(n - 1)*W, lagX = us => W/2 + (us*1e-6*S.fs)/S.maxLag*(W/2);
+    g.setLineDash([4, 4]);
+    if (S.tauFront != null){ g.strokeStyle = '#3ecf8e'; g.beginPath(); g.moveTo(lagX(S.tauFront), 0); g.lineTo(lagX(S.tauFront), H); g.stroke(); }
+    if (S.tauBack != null){ g.strokeStyle = '#ff4d4f'; g.beginPath(); g.moveTo(lagX(S.tauBack), 0); g.lineTo(lagX(S.tauBack), H); g.stroke(); }
+    g.setLineDash([]);
+    g.strokeStyle = '#5b9dff'; g.lineWidth = 2; g.beginPath();
+    for (let i = 0; i < n; i++){ const y = H - 8 - Math.max(-0.1, c[i])*(H - 16); i ? g.lineTo(x(i), y) : g.moveTo(x(i), y); }
+    g.stroke(); g.lineWidth = 1;
+    g.fillStyle = '#8b95a3'; g.font = '12px system-ui';
+    g.fillText('← L heard first', 6, 14); const t = 'R heard first →'; g.fillText(t, W - g.measureText(t).width - 6, 14);
+  }
+  requestAnimationFrame(draw);
+}
+</script>
+</body>
+</html>
