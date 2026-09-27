@@ -79,18 +79,25 @@ export function createSfx(given) {
       this.t = ctx.currentTime + 0.03;
       this.dur = loop ? Infinity : dur;
       this.end = this.t + this.dur;
+      // out (its envelope and fades) → level (how near, while it's moved) → muffle (behind) → pan (left/right)
       this.out = ctx.createGain(); this.out.gain.value = gain;
-      let last = this.out;
-      if (angle != null) {                           // place it: left/right by pan, behind by muffling
-        const a = ((angle % 360) + 540) % 360 - 180;
-        if (Math.abs(a) > 95) {
-          const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 9000 - 6000 * (Math.abs(a) - 95) / 85;
-          last.connect(lp); last = lp;
-        }
-        if (ctx.createStereoPanner) { const p = ctx.createStereoPanner(); p.pan.value = clamp(Math.sin(a * Math.PI / 180), -1, 1) * 0.85; last.connect(p); last = p; }
-      }
+      this.level = ctx.createGain();
+      this.muffle = ctx.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 20000;
+      this.pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      this.out.connect(this.level); this.level.connect(this.muffle);
+      const last = this.pan ? (this.muffle.connect(this.pan), this.pan) : this.muffle;
       this.dry = ctx.createGain(); this.wet = ctx.createGain(); this.wet.gain.value = 0.16;
       last.connect(this.dry); last.connect(this.wet); this.dry.connect(comp); this.wet.connect(verb);
+      this.aim(angle, 1, true);
+    }
+    // Where it is: angle (0 ahead, 90 right, 180 behind; null = everywhere) and how near (gain, 1 = as made).
+    // Left/right by pan (on headphones), behind by muffling. Glides unless `jump`.
+    aim(angle, gain = 1, jump = false) {
+      const t = ctx.currentTime, set = (p, v) => jump ? p.setValueAtTime(v, t) : p.setTargetAtTime(v, t, 0.04);
+      const a = angle == null ? 0 : ((angle % 360) + 540) % 360 - 180;
+      set(this.muffle.frequency, angle != null && Math.abs(a) > 95 ? 9000 - 6000 * (Math.abs(a) - 95) / 85 : 20000);
+      if (this.pan) set(this.pan.pan, angle == null ? 0 : clamp(Math.sin(a * Math.PI / 180), -1, 1) * 0.85);
+      set(this.level.gain, gain);
     }
     space(w) { this.wet.gain.value = w; return this; }   // how much room: 0 outdoors, ~0.35 a hall
     keep(node, t0 = 0, len = null) {                     // start a source; one-shots stop on their own
@@ -120,7 +127,7 @@ export function createSfx(given) {
       this.out.gain.cancelScheduledValues(now); this.out.gain.setValueAtTime(this.out.gain.value, now); this.out.gain.linearRampToValueAtTime(0, now + fade);
       for (const n of this.nodes) try { n.stop(now + fade + 0.05); } catch {}
       if (this.speech) speechSynthesis.cancel();
-      setTimeout(() => { this.out.disconnect(); this.dry.disconnect(); this.wet.disconnect(); }, (fade + 3) * 1000);
+      setTimeout(() => { this.out.disconnect(); this.level.disconnect(); this.muffle.disconnect(); this.pan?.disconnect(); this.dry.disconnect(); this.wet.disconnect(); }, (fade + 3) * 1000);
     }
     get done() { return this.stopped || (!this.loop && ctx.currentTime > this.end + 2.5); }
   }
@@ -621,6 +628,23 @@ export function createSfx(given) {
     },
     play: (key, opts = {}) => start(key, opts, false),       // once, for its usual length (or opts.dur seconds)
     loop: (key, opts = {}) => start(key, opts, true),        // until .stop()
+    // For as long as it's held (a sound being moved around): the sound again and again, back to back.
+    // .aim(angle, gain) moves it, .stop() ends it. `adopt`: a voice already playing (the tap that began it).
+    hold(key, { angle = null, gain = 1, adopt = null } = {}) {
+      const len = (R[key] || R.behind).len, vs = new Set();
+      let stopped = false, timer = 0;
+      const again = (after) => { timer = setTimeout(() => {
+        if (stopped) return;
+        const v = start(key, { angle }, false); v.aim(angle, gain, true); vs.add(v);
+        again(len + 0.25);
+      }, after * 1000); };
+      if (adopt && !adopt.done) { vs.add(adopt); adopt.aim(angle, gain); again(Math.max(0, adopt.end - ctx.currentTime) + 0.25); }
+      else again(0);
+      return {
+        aim(a, g = 1) { angle = a; gain = g; for (const v of vs) v.done ? vs.delete(v) : v.aim(a, g); },
+        stop(fade = 0.35) { stopped = true; clearTimeout(timer); for (const v of vs) v.stop(fade); vs.clear(); },
+      };
+    },
     stopAll() { for (const v of [...live]) v.stop(); if (window.speechSynthesis) speechSynthesis.cancel(); },
     playing: () => [...live].filter(v => !v.done),
     volume(x) { master.gain.value = x; },

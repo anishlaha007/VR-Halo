@@ -177,16 +177,20 @@ export class Halo {
   // otherwise it fills the window.
   use(canvas, size = null, dpr = 1) { this.cv = canvas; this.g = canvas.getContext('2d'); this.size = size; this.fixedDpr = dpr; this.W = 0; }
 
-  // a: { key, color, core, icon, label, form, yaw, ttl, level, alert, kick, live }. yaw = world direction in
-  // degrees, or null for a sound heard but not located. live() (optional) is the sound's loudness right now,
+  // a: { key, color, core, icon, label, form, yaw, ttl, level, alert, kick, live, track }. yaw = world direction
+  // in degrees, or null for a sound heard but not located. live() (optional) is the sound's loudness right now,
   // 0–1; the wave follows it instead of its usual rhythm. kick: false refreshes a wave without a pulse.
   // The same sound again from about the same direction keeps the wave alive instead of stacking a second one.
+  // track: one sound that moves (dragged round the remote's dial): each update moves that one wave, wherever
+  // it goes, and a short ttl lets it sink away when it's let go.
   add(a, now = performance.now()) {
     const f = a.form || {}, ttl = a.ttl || 6000, around = a.yaw == null, size = clamp(+(a.level ?? f.size ?? 0.6) || 0.6, 0, 1);
-    const same = this.voices.find(v => v.key === a.key && v.end - now > FADE && v.around === around
-      && (around || f.omni || Math.abs(wrap(v.yaw - a.yaw)) < 30));
+    const same = (a.track != null && this.voices.find(v => v.track === a.track && v.end > now))
+      || this.voices.find(v => v.key === a.key && v.end - now > FADE && v.around === around
+        && (around || f.omni || Math.abs(wrap(v.yaw - a.yaw)) < 30));
     if (same) {
-      Object.assign(same, { yaw: a.yaw, end: now + ttl, fadeLen: FADE, size });
+      if (a.track != null) same.track = a.track;
+      Object.assign(same, { yaw: a.yaw, end: now + ttl, fadeLen: Math.min(FADE, ttl), size });
       if (a.kick !== false) same.kick = now;
       if (a.alert) same.sweep = now;
       return same;
@@ -194,7 +198,7 @@ export class Halo {
     const v = {
       key: a.key, form: f, yaw: a.yaw, around, size, sz: size, label: a.label || a.key, live: a.live || null,
       c1: rgb(a.color), c2: rgb(a.core || a.color), icon: icon(a.icon), born: now, end: now + ttl, fadeLen: FADE,
-      kick: 0, sweep: a.alert ? now : 0, seed: Math.random() * 100, u: null, vel: 0, dots: [], acc: 0,
+      kick: 0, sweep: a.alert ? now : 0, seed: Math.random() * 100, u: null, vel: 0, dots: [], acc: 0, track: a.track ?? null,
     };
     this.voices.push(v);
     return v;

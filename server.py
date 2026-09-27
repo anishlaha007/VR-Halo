@@ -96,6 +96,8 @@ def make_alert(src: dict, source: str) -> dict:
             alert[k] = str(src[k])[:40]
     if src.get("hold"):                             # keeps a sound that's still going alive, without a new pulse
         alert["hold"] = True
+    if src.get("track"):                            # one sound being moved around (held on the remote's dial)
+        alert["track"] = str(src["track"])[:16]
     try:                                            # optional loudness 0-1: sets how big the wave is
         if src.get("level") is not None:
             alert["level"] = round(min(1.0, max(0.0, float(src["level"]))), 3)

@@ -346,8 +346,9 @@ function addAlert(m) {
   const yaw = around ? null : wrap(S.heading + a.angle);
   // hazards, and anything behind you, also send a light round the edge to get your attention.
   // `hold` is a sound that's still going (an ambience from the remote): it stays, without a new pulse.
+  // `track` is one sound being moved round the remote's dial: each update moves the same wave (and beacon).
   const v = halo.add({ key: a.sound, color: a.color, core: a.core, icon: a.icon, label: a.label, form: a.form, level: a.level, ttl: a.ttl || 6000,
-                       yaw, alert: !a.hold && (!!a.form.hazard || back), kick: !a.hold });
+                       yaw, alert: !a.hold && (!!a.form.hazard || back), kick: !a.hold, track: a.track });
   if (yaw != null) v.world = S.mode === 'ar' ? anchor(yaw) : null;   // AR: pin its beacon to a spot in the room
   if (!a.hold) navigator.vibrate?.(a.form.hazard ? [140, 70, 140, 70, 140] : back ? [90, 60, 90, 60, 90] : [60]);
 }

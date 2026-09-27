@@ -45,7 +45,8 @@ It prints the links to open. The page at `http://<laptop-ip>:8000/` lists them t
 
 Swipe left and right, or tap the tabs at the top.
 
-- **Aim:** pick a group (Danger, Traffic, People, Home, Nature, Low & music), pick a sound, and tap where it is. The display shows it there, and this phone plays it, panned left or right (on headphones) and muffled when it's behind. **Phone** turns the phone's sound off and on. **Snap 45°** snaps to the wearer's 8 directions. **Again** repeats the last sound from the same place in the room. **Clear** clears the display.
+- **Aim:** pick a group (Danger, Traffic, People, Home, Nature, Low & music), pick a sound, and tap where it is. The display shows it there, and this phone plays it, panned left or right (on headphones) and muffled when it's behind.
+- **Moving sounds:** press and hold on the dial (or tap and drag) and the sound becomes one thing that moves. It follows your finger round the dial, the display moves that same wave and beacon round the view with it, and the phone keeps playing it, following your finger left and right, until you let go. Then it fades away. Nearer the middle is nearer the wearer: a bigger wave and a louder sound. Try a car horn driving round them. **Phone** turns the phone's sound off and on. **Snap 45°** snaps to the wearer's 8 directions. **Again** repeats the last sound from the same place in the room. **Clear** clears the display.
 - **Sounds:** every sound, to play on the phone only. Nothing is sent to the display. Tap again to stop.
 - **Ambience:** sounds that go on (rain, a stream, waves, wind, birds, crickets, a fire, a crowd, music, children playing, typing, a clock, a washing machine, a vacuum, snoring, a storm), each a switch. Visuals only: each one circles the display's edge while it's on, and nothing plays on the phone. Mix as many as you like.
 
@@ -94,6 +95,8 @@ curl -X POST http://localhost:8000/alert -d '{"sound":"siren","angle":150}'
 # angle null = all around (no direction), like an ambience
 # sound: any key in SOUNDS in common.js (fire, siren, glass, dog, rain, …). See /forms for all 55.
 # optional level: 0-1 loudness, sets how big the wave is (defaults to the sound's own size)
+# optional track: an id for one moving sound. Alerts with the same track move that one wave (the remote's
+#   press-and-hold sends one ~20 times a second with "hold": true and a short ttl, so it fades when they stop)
 curl -X POST http://localhost:8000/send -d '{"type":"clear","sound":"rain"}'   # clear one sound (or leave out sound: all)
 ```
 
