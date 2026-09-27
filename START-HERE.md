@@ -41,12 +41,13 @@ It prints the links to open. The page at `http://<laptop-ip>:8000/` lists them t
 4. Keyboard in the preview: **T** = test sound, **1–9** and **0** = the first ten sounds, **C** = clear. Settings has a button for every sound.
 5. Open `http://localhost:8000/display?demo` to watch it run through the conversation scenario and a few other sounds on its own.
 
-### The remote's three screens
+### The remote's four screens
 
 Swipe left and right, or tap the tabs at the top.
 
 - **Aim:** pick a group (Danger, Traffic, People, Home, Nature, Low & music), pick a sound, and tap where it is. The display shows it there, and this phone plays it, panned left or right (on headphones) and muffled when it's behind.
 - **Moving sounds:** press and hold on the dial (or tap and drag) and the sound becomes one thing that moves. It follows your finger round the dial, the display moves that same wave and beacon round the view with it, and the phone keeps playing it, following your finger left and right, until you let go. Then it fades away. Nearer the middle is nearer the wearer: a bigger wave and a louder sound. Try a car horn driving round them. **Phone** turns the phone's sound off and on. **Snap 45°** snaps to the wearer's 8 directions. **Again** repeats the last sound from the same place in the room. **Clear** clears the display.
+- **Here:** you are the sound. Point the remote at the wearer and tap a sound: it plays from the remote's speaker, and the display shows it coming from where you're standing. It keeps following you while it plays, so walk round them, still pointing at them, and it moves round their view. Hold a sound to keep it going for as long as you like. A little map shows where you are around them.
 - **Sounds:** every sound, to play on the phone only. Nothing is sent to the display. Tap again to stop.
 - **Ambience:** sounds that go on (rain, a stream, waves, wind, birds, crickets, a fire, a crowd, music, children playing, typing, a clock, a washing machine, a vacuum, snoring, a storm), each a switch. Visuals only: each one circles the display's edge while it's on, and nothing plays on the phone. Mix as many as you like.
 
@@ -56,6 +57,14 @@ The wearer is in the middle, and their head turns as they turn (the display send
 
 - **Turn with me** (on by default on Android, one tap to allow motion on iPhone) turns the dial with the remote phone too, so the top of the dial is always the way *you* face. Then you just tap where the sound is around you, as you see it, even if you and the wearer face different ways. When both phones have a compass (most do; the display needs camera view or AR), they line up by themselves, and an **N** shows north. Otherwise, or if the compass is off (they wobble indoors, near metal), point the remote the way the wearer faces and tap **Align**. Align again if it drifts.
 - **Turn with me off** (a laptop): the top of the dial is the way the wearer faced when they started, and only their head turns.
+
+### How Here knows where you are
+
+A phone's compass says which way the phone points, not where it is, and a web page can't measure how far apart two phones are (GPS is metres out and doesn't work indoors). So you tell it by pointing: aim the remote at the wearer (its top edge, or its back camera if you hold it up), and you must be on the opposite side of them from where it points. The two compasses turn that into a direction from the wearer, relative to where they're looking.
+
+- **Lined up by compass** when both phones have one (the display needs camera view or AR). Nothing to do.
+- **Calibrate** when there's no compass, or it's off (indoors, near metal): stand right in front of the wearer, point the remote at them and tap **Calibrate**. That lines the phones up by hand. It's the same line-up as **Align** on the Aim screen, so either one does both.
+- It's as accurate as your pointing and the compasses: within 10–30° usually, which is plenty to say "behind-left". It only knows your direction from them, not how far away you are.
 
 The phone's sounds are made on the phone from a recipe each (in `sfx.js`), not recordings. They're sketches of the real thing. Talking, your name and shouting use the phone's own text-to-speech voice. On recent iPhones they play even with the ring switch on silent.
 

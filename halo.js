@@ -190,7 +190,7 @@ export class Halo {
         && (around || f.omni || Math.abs(wrap(v.yaw - a.yaw)) < 30));
     if (same) {
       if (a.track != null) same.track = a.track;
-      Object.assign(same, { yaw: a.yaw, end: now + ttl, fadeLen: Math.min(FADE, ttl), size });
+      Object.assign(same, { yaw: a.yaw, around, end: now + ttl, fadeLen: Math.min(FADE, ttl), size });   // (a moving sound can find its place, or lose it)
       if (a.kick !== false) same.kick = now;
       if (a.alert) same.sweep = now;
       return same;
