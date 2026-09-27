@@ -1,22 +1,35 @@
 // Shared by remote.html and display.html.
-// Change a sound's name, icon or colour here and both sides update.
+// Change a sound's name, icon, colour or shape here and both sides update.
 
 // Colour = category, so users learn it at a glance:
-//   red = danger, amber = vehicle, blue = person, teal = home, purple = unknown/mic
+//   red = danger, amber = vehicle, blue = person, teal = home, orange = texture, violet = unknown/ambient
+// `core` is the hot colour at the heart of the wave. `form` is its shape; halo.js explains each number.
+//   spiky ↔ soft (sharp) · dotted ↔ solid (grain) · large ↔ small (size) · tight ↔ broad waves (freq)
 export const SOUNDS = {
-  fire:     { label: 'Fire alarm',  icon: '🔥', color: '#ff4d4f' },
-  siren:    { label: 'Siren',       icon: '🚨', color: '#ff4d4f' },
-  horn:     { label: 'Car horn',    icon: '📯', color: '#f5a524' },
-  bus:      { label: 'Bus',         icon: '🚌', color: '#f5a524' },
-  name:     { label: 'Your name',   icon: '🗣️', color: '#5b9dff' },
-  doorbell: { label: 'Doorbell',    icon: '🔔', color: '#2fd1b5' },
-  behind:   { label: 'Sound',       icon: '👂', color: '#b98cff' },   // used by the real mic detector
+  fire:     { label: 'Fire alarm', icon: '🔥', color: '#ff2e4d', core: '#ffb03a',
+              form: { size: 1,   sharp: .95, grain: .08, freq: .85, flow: .1,  blob: 1,   beat: 'alarm', hazard: true } },
+  siren:    { label: 'Siren',      icon: '🚨', color: '#ff2e63', core: '#b27bff',
+              form: { size: 1,   sharp: .7,  grain: 0,   freq: .7,  flow: .25, blob: .9,  beat: 'wail', hazard: true } },
+  horn:     { label: 'Car horn',   icon: '📯', color: '#ff8a00', core: '#ffe14d',
+              form: { size: .9,  sharp: .85, grain: 0,   freq: .55, flow: .05, blob: 1,   beat: 'honk', hazard: true } },
+  bus:      { label: 'Bus',        icon: '🚌', color: '#ff9f1c', core: '#ff5e3a',
+              form: { size: .95, sharp: .1,  grain: .05, freq: .08, flow: .5,  blob: .75, beat: 'rumble' } },
+  name:     { label: 'Your name',  icon: '🗣️', color: '#3d7bff', core: '#7ce8ff',
+              form: { size: .7,  blob: .8, bars: true } },
+  doorbell: { label: 'Doorbell',   icon: '🔔', color: '#14d2b9', core: '#8dffd9',
+              form: { size: .6,  sharp: 0,   grain: .15, freq: .4,  flow: 0,   blob: .9,  beat: 'chime' } },
+  crackle:  { label: 'Crackling',  icon: '🍂', color: '#ff7a1a', core: '#ffd166',
+              form: { size: .5,  sharp: .5,  grain: .95, freq: .6,  flow: 0,   blob: .3,  beat: 'crackle' } },
+  ambient:  { label: 'Ambient',    icon: '🎶', color: '#7b5cff', core: '#e08cff',
+              form: { size: .4,  freq: .15, beat: 'breathe', omni: true } },
+  behind:   { label: 'Unknown',    icon: '👂', color: '#a66bff', core: '#6b7bff',   // used by the real mic detector
+              form: { size: .6,  sharp: .2,  grain: .3,  freq: .5,  flow: .2,  blob: .8,  beat: 'breathe' } },
 };
 
-// Fill in label/icon/colour from the catalogue unless the message overrides them.
+// Fill in label/icon/colour/form from the catalogue unless the message overrides them.
 export function resolve(a) {
   const s = SOUNDS[a.sound] || SOUNDS.behind;
-  return { ...a, label: a.label || s.label, icon: a.icon || s.icon, color: a.color || s.color };
+  return { ...a, label: a.label || s.label, icon: a.icon || s.icon, color: a.color || s.color, core: a.core || s.core, form: s.form };
 }
 
 // Angles everywhere: degrees, 0 = ahead, +90 = right, -90 = left, 180 = behind.
@@ -79,25 +92,4 @@ export function connect(role, { onMessage, onState } = {}) {
     get ready() { return mode === 'fallback' ? !!es && es.readyState === 1 : !!ws && ws.readyState === 1; },
     get transport() { return mode; },
   };
-}
-
-// Draws an alert card onto a canvas. The Quest/Android AR mode uses it as a texture.
-export function drawCard(a, { sub = '', w = 640, h = 220 } = {}) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const g = c.getContext('2d'), r = 44, pad = 10;
-  const rr = (x, y, ww, hh, rad) => { g.beginPath(); g.roundRect(x, y, ww, hh, rad); };
-  // glow + body
-  g.shadowColor = a.color; g.shadowBlur = 26;
-  rr(pad, pad, w - 2 * pad, h - 2 * pad, r); g.fillStyle = 'rgba(12,16,22,0.86)'; g.fill();
-  g.shadowBlur = 0; g.lineWidth = 6; g.strokeStyle = a.color; g.stroke();
-  // icon disc
-  const cx = pad + 100, cy = h / 2;
-  g.beginPath(); g.arc(cx, cy, 70, 0, Math.PI * 2); g.fillStyle = a.color + '33'; g.fill();
-  g.font = '84px "Apple Color Emoji","Noto Color Emoji","Segoe UI Emoji",sans-serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(a.icon, cx, cy + 4);
-  // text
-  g.textAlign = 'left'; g.fillStyle = '#fff';
-  g.font = '700 62px system-ui,-apple-system,Roboto,sans-serif'; g.fillText(a.label, cx + 100, sub ? cy - 26 : cy, w - cx - 130);
-  if (sub) { g.fillStyle = '#aab4c2'; g.font = '500 40px system-ui,-apple-system,Roboto,sans-serif'; g.fillText(sub, cx + 100, cy + 42, w - cx - 130); }
-  return c;
 }

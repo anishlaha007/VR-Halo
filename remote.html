@@ -174,7 +174,7 @@ const buzz = (ms) => navigator.vibrate?.(ms);   // Android only; iPhone browsers
 
 $('snap').onclick = () => { snap = !snap; $('snap').classList.toggle('on', snap); };
 $('again').onclick = () => last && fire(last.sound, last.angle);
-$('clear').onclick = () => { hub.send({ type: 'clear' }); buzz(10); $('readout').innerHTML = '<div class="main">Cleared</div><div class="sub">All cards removed from the display</div>'; };
+$('clear').onclick = () => { hub.send({ type: 'clear' }); buzz(10); $('readout').innerHTML = '<div class="main">Cleared</div><div class="sub">All sounds cleared from the display</div>'; };
 </script>
 </body>
 </html>

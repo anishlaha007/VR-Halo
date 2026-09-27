@@ -15,7 +15,7 @@ Setup:
 
 Send an alert from any script or terminal:
     curl -X POST http://localhost:8000/alert -d '{"sound":"fire","angle":180}'
-    (angle: 0 = ahead, 90 = right, -90 = left, 180 = behind)
+    (angle: 0 = ahead, 90 = right, -90 = left, 180 = behind; optional level: 0-1 loudness)
 """
 import argparse
 import asyncio
@@ -73,6 +73,11 @@ def make_alert(src: dict, source: str) -> dict:
     for k in ("label", "icon", "color", "cid"):   # optional overrides; display fills in the rest
         if src.get(k):
             alert[k] = str(src[k])[:40]
+    try:                                            # optional loudness 0-1: sets how big the wave is
+        if src.get("level") is not None:
+            alert["level"] = round(min(1.0, max(0.0, float(src["level"]))), 3)
+    except (TypeError, ValueError):
+        pass
     return alert
 
 
@@ -222,6 +227,7 @@ async def index(request: web.Request) -> web.Response:
              ("display", "AR display — Android, iPhone, Quest or laptop preview")]
     if os.path.exists(os.path.join(HERE, "mic.html")):
         links.append(("mic", "Stereo mic detector — real sounds from behind"))
+    links.append(("forms", "Forms — every sound's wave side by side"))
     items = "".join(f'<a href="/{p}"><b>/{p}</b><span>{d}</span></a>' for p, d in links)
     html = f"""<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
 <title>Sound AR hub</title><style>
@@ -265,9 +271,11 @@ def main() -> None:
     app.router.add_post("/send", send_handler)
     app.router.add_route("*", "/alert", post_alert)
     for route, name in [("/remote", "remote.html"), ("/display", "display.html"),
-                        ("/phone", "display.html"), ("/quest", "display.html"), ("/mic", "mic.html")]:
+                        ("/phone", "display.html"), ("/quest", "display.html"), ("/mic", "mic.html"),
+                        ("/forms", "forms.html")]:
         app.router.add_get(route, page(name))
     app.router.add_get("/common.js", page("common.js"))
+    app.router.add_get("/halo.js", page("halo.js"))
     app.router.add_static("/vendor", os.path.join(HERE, "vendor"))
 
     ip = lan_ip()
