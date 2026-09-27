@@ -14,6 +14,7 @@ Any script (POST /alert)─┘                          Android · iPhone · Que
 | `remote.html` | The tap dial. Any phone or the laptop browser. | Changing the remote's look. |
 | `display.html` | The AR view. One page, four modes (below), plus the start screen and settings. | Changing modes, chrome or the start screen. |
 | `halo.js` | The visual language: draws every sound as a wave on the edge of the view. | **Changing how sounds look or move.** |
+| `icons.js` | The icons that sit inside the waves (also used on the remote). | Adding or redrawing an icon. |
 | `common.js` | Sound list (name, icon, colour, shape) + connection code, shared by all pages. | Adding a sound or tuning its shape. |
 | `forms.html` | Every sound's wave side by side, at `/forms`. | — (reload it after tuning a shape) |
 | `mic.html` | Your stereo-mic "behind" detector, pointed at this hub. | — |
@@ -34,7 +35,7 @@ It prints the links to open. The page at `http://<laptop-ip>:8000/` lists them t
 1. Open `http://localhost:8000/display` → **Laptop preview**.
 2. Open `http://localhost:8000/remote` in a second window (or on your phone).
 3. Tap the dial. A wave grows out of the edge of the display on that side. Tap the bottom of the dial and it appears on the top edge (behind you), with a flash of light running round the edge. Drag or use ← → to turn toward it and watch it slide round to the bottom.
-4. Keyboard in the preview: **T** = test sound, **1–9** = each sound, **C** = clear.
+4. Keyboard in the preview: **T** = test sound, **1–9** and **0** = each sound, **C** = clear.
 5. Open `http://localhost:8000/display?demo` to watch it run through the conversation scenario and a few other sounds on its own.
 
 ## 3. Two phones
@@ -70,7 +71,7 @@ Anything that can send an HTTP request can trigger an alert:
 ```bash
 curl -X POST http://localhost:8000/alert -d '{"sound":"siren","angle":150}'
 # angle: 0 ahead, 90 right, -90 left, 180 behind
-# sound: fire, siren, horn, bus, name, doorbell, crackle, ambient, behind
+# sound: fire, siren, truck, horn, bus, bike, crackle, name, doorbell, ambient, behind
 # optional level: 0-1 loudness, sets how big the wave is (defaults to the sound's own size)
 ```
 
@@ -105,12 +106,25 @@ A sound's shape says what kind of sound it is. Each sound's `form` in `common.js
 | `flow` | separate bumps | one continuous band | steady rumbles |
 | `blob` | no marker | big marker | the bump that marks the exact direction |
 
-Also: `beat` (the rhythm it breathes with: `breathe`, `alarm`, `wail`, `honk`, `rumble`, `chime`, `crackle`), `bars` (speech: a waveform of bars either side of the marker), `hazard` (bigger surge on arrival) and `omni` (no single source, so a soft band all round the edge, fuller on its side). Colour is the category, and red means danger.
+Also: `beat` (the rhythm it breathes with: `breathe`, `alarm`, `wail`, `honk`, `blast`, `ring`, `rumble`, `chime`, `crackle`), `bars` (speech: a waveform of bars either side of the marker), `hazard` (bigger surge on arrival) and `omni` (no single source, so a soft band all round the edge, fuller on its side).
+
+**Colour controls attention** (colour psychology). Warm sounds pull your eye and cool ones stay calm:
+
+| Colour | Means | Sounds |
+|---|---|---|
+| Red | Danger, a loud warning | Fire alarm, siren |
+| Orange → amber → gold | Look now: traffic and other warnings, hottest first | Truck horn, car horn, bus, bike bell, crackling |
+| Blue / teal | Calm: people and home | Your name, doorbell |
+| Purple | A low hum or tone | Ambient, unknown sounds |
+
+Each sound has a `color` (its body) and a `core` (the hot colour at its heart). `SOUNDS` in `common.js` is listed hottest first.
+
+**Icons** tell you what the sound is. A sound's `icon` names a shape in `icons.js`, drawn dark and upright inside the dome that marks its direction. The dome grows to fit the icon, and icons are bigger for hazards. Spiky sounds keep their spikes around a rounder dome. Icons so far: alarm clock (fire alarm), police light (siren), air horn (truck horn), car horn, bus, bike bell, leaf (crackling), speech bubble (your name), bell (doorbell), music (ambient, on the remote only because ambient has no dome) and ear (unknown). Each is an SVG path on a 24×24 grid. To add one, draw it there, add it to `ICONS`, and name it as a sound's `icon`.
 
 ## 7. Where to change the look
 
-- **Sounds, colours, shapes:** `SOUNDS` in `common.js`. Open `/forms` to see every sound side by side, in front, in the corner, off-screen and behind.
-- **How waves are drawn and move:** `halo.js`. `Halo.step()` sets size and placement, `Halo.h()` is the wave's outline, and `body()`, `grain()`, `speech()`, `omni()` and `sweep()` draw each kind.
+- **Sounds, colours, shapes, icons:** `SOUNDS` in `common.js`, and the icon drawings in `icons.js`. Open `/forms` to see every sound side by side, in front, in the corner, off-screen and behind.
+- **How waves are drawn and move:** `halo.js`. `Halo.step()` sets size and placement, `Halo.h()` is the wave's outline, `dome()` is the direction marker, and `body()`, `grain()`, `badge()` (the icon), `speech()`, `omni()` and `sweep()` draw each part.
 - **Where a direction lands on the edge:** `Rim.toU()` in `halo.js`.
 - **Start screen, buttons, settings:** the CSS at the top of `display.html`.
 - **Timing:** `ttl` (default 6000 ms) per alert. `FADE` at the top of `halo.js`.

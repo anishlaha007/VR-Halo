@@ -276,6 +276,7 @@ def main() -> None:
         app.router.add_get(route, page(name))
     app.router.add_get("/common.js", page("common.js"))
     app.router.add_get("/halo.js", page("halo.js"))
+    app.router.add_get("/icons.js", page("icons.js"))
     app.router.add_static("/vendor", os.path.join(HERE, "vendor"))
 
     ip = lan_ip()

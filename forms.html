@@ -19,8 +19,13 @@ header p{margin:6px 0 0;color:var(--mut);max-width:60ch}
 figure{margin:0}
 .screen{position:relative;aspect-ratio:16/10;border-radius:18px;overflow:hidden;background:radial-gradient(120% 90% at 50% 40%,#141027,#07060d 70%);border:1px solid var(--line)}
 .screen canvas{position:absolute;inset:0;width:100%;height:100%}
-figcaption{display:flex;justify-content:space-between;gap:10px;padding:10px 4px 0}
-figcaption b{font-weight:600}
+figcaption{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 4px 0}
+figcaption b{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.badge{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 50% 110%,var(--k),var(--c) 65%);box-shadow:0 0 10px color-mix(in srgb,var(--c) 70%,transparent);color:rgba(10,4,14,.85)}
+.badge svg{width:64%;height:64%}
+.heat{max-width:1340px;margin:-6px auto 22px;display:flex;flex-wrap:wrap;gap:8px 22px;color:var(--dim);font-size:12.5px}
+.heat span{display:inline-flex;align-items:center;gap:8px}
+.heat i{width:36px;height:8px;border-radius:99px}
 figcaption span{color:var(--dim);font-size:12px;text-align:right}
 </style>
 </head>
@@ -32,11 +37,17 @@ figcaption span{color:var(--dim);font-size:12px;text-align:right}
   </div>
   <div class="seg" id="pos"></div>
 </header>
+<div class="heat">
+  <span><i style="background:linear-gradient(90deg,#ff2e4d,#ff6a1a,#ffb21f)"></i>warm: look now (red = danger)</span>
+  <span><i style="background:linear-gradient(90deg,#3d7bff,#14d2b9)"></i>cool: calm</span>
+  <span><i style="background:linear-gradient(90deg,#7b5cff,#a66bff)"></i>purple: a low hum</span>
+</div>
 <div id="grid"></div>
 
 <script type="module">
 import { SOUNDS, resolve } from '/common.js';
 import { Halo } from '/halo.js';
+import { iconSvg } from '/icons.js';
 
 // where the sound is, relative to where you look (the frame shows a 70° field of view)
 const POS = { 'in front': 0, 'moving': 22, 'corner': 34, 'off-screen': 95, 'behind': 170 };
@@ -47,7 +58,7 @@ for (const [key, s] of Object.entries(SOUNDS)) {
   const fig = document.createElement('figure');
   const f = s.form, traits = [f.omni ? 'all around' : f.bars ? 'speech bars' : (f.sharp > .5 ? 'spiky' : 'soft'),
     !f.bars && !f.omni && (f.grain > .5 ? 'dotted' : 'solid'), !f.bars && (f.freq > .5 ? 'high' : 'low') + ' freq', f.beat].filter(Boolean);
-  fig.innerHTML = `<div class="screen"><canvas></canvas></div><figcaption><b>${s.label}</b><span>${traits.join(' · ')}</span></figcaption>`;
+  fig.innerHTML = `<div class="screen"><canvas></canvas></div><figcaption><b style="--c:${s.color};--k:${s.core}"><span class="badge">${iconSvg(s.icon)}</span>${s.label}</b><span>${traits.join(' · ')}</span></figcaption>`;
   document.getElementById('grid').append(fig);
   const cv = fig.querySelector('canvas'), halo = new Halo(cv, [1, 1], Math.min(devicePixelRatio || 1, 2));
   cells.push({ key, cv, halo });
@@ -57,7 +68,7 @@ function place() {
   for (const c of cells) {
     const a = resolve({ sound: c.key });
     c.halo.voices = [];
-    c.halo.add({ key: c.key, color: a.color, core: a.core, form: a.form, yaw: POS[pos], ttl: 1e9 });
+    c.halo.add({ key: c.key, color: a.color, core: a.core, icon: a.icon, form: a.form, yaw: POS[pos], ttl: 1e9 });
   }
 }
 for (const k of Object.keys(POS)) {

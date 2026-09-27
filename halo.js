@@ -18,11 +18,13 @@
 //   freq   0–1  a few broad swells (low pitch) → many tight ripples (high pitch)
 //   flow   0–1  separate bumps → one continuous band
 //   blob   0–1  size of the bump that marks the exact direction
-//   beat        rhythm it breathes with: breathe, alarm, wail, honk, rumble, chime, crackle
+//   beat        rhythm it breathes with: breathe, alarm, wail, honk, blast, ring, rumble, chime, crackle
 //   bars        speech: a row of bars either side of the marker, like a voice waveform
 //   hazard      bigger surge on arrival
 //   omni        no single source (ambient): a soft band around the whole edge, fuller on its side
+// A sound's `icon` (icons.js) sits upright inside the marker, which grows into a dome big enough to hold it.
 import { wrap } from '/common.js';
+import { iconPath } from '/icons.js';
 
 const D2R = Math.PI / 180;
 const FADE = 900;                     // ms a wave takes to sink back into the edge
@@ -54,6 +56,11 @@ const BEATS = {
   },
   wail: (t) => 0.86 + 0.14 * Math.sin(t * 2.6),
   honk: (t) => { const c = t % 3.2; return 0.5 + 0.65 * Math.max(sstep(0, 0.04, c) * (1 - sstep(0.3, 0.4, c)), sstep(0.5, 0.54, c) * (1 - sstep(1.1, 1.3, c))); },
+  blast: (t) => { const c = t % 4; return 0.5 + 0.7 * sstep(0, 0.06, c) * (1 - sstep(1.5, 1.8, c)); },          // one long air-horn blast
+  ring: (t) => {                      // bike bell: two quick trills
+    const c = t % 2.4, on = Math.max(sstep(0, 0.02, c) * (1 - sstep(0.35, 0.45, c)), sstep(0.55, 0.57, c) * (1 - sstep(0.9, 1, c)));
+    return 0.45 + 0.7 * on * (0.85 + 0.15 * Math.sin(t * 55));
+  },
   rumble: (t, s) => 0.8 + 0.2 * noise(t * 1.6, s),
   chime: (t) => { const c = t % 2.8; return 0.42 + 0.7 * sstep(0, 0.03, c) * Math.max(Math.exp(-c * 2.6), c > 0.55 ? 0.85 * Math.exp(-(c - 0.55) * 2.6) : 0); },
   crackle: (t, s) => 0.6 + 0.4 * noise(t * 6, s),
@@ -124,7 +131,7 @@ export class Halo {
     if (same) { Object.assign(same, { yaw: a.yaw, end: now + ttl, fadeLen: FADE, kick: now }); if (a.alert) same.sweep = now; return same; }
     const v = {
       key: a.key, form: f, yaw: a.yaw, size: clamp(+(a.level ?? f.size ?? 0.6) || 0.6, 0, 1),
-      c1: rgb(a.color), c2: rgb(a.core || a.color), born: now, end: now + ttl, fadeLen: FADE,
+      c1: rgb(a.color), c2: rgb(a.core || a.color), icon: iconPath(a.icon), born: now, end: now + ttl, fadeLen: FADE,
       kick: 0, sweep: a.alert ? now : 0, seed: Math.random() * 100, u: null, vel: 0, dots: [], acc: 0,
     };
     this.voices.push(v);
@@ -155,9 +162,10 @@ export class Halo {
     for (const v of this.voices) if (!v.form.omni) this.scrim(v);
     g.globalCompositeOperation = 'screen';                         // overlapping sounds mix their colours
     for (const v of this.voices) {
-      if (v.form.omni) this.omni(v);
-      else if (v.form.bars) this.speech(v);
+      if (v.form.omni) { this.omni(v); continue; }
+      if (v.form.bars) this.speech(v);
       else { this.body(v, -v.k.spread, v.k.spread); this.grain(v, now, dt); }
+      if (v.icon) this.badge(v);
     }
     for (const v of this.voices) if (v.sweep) this.sweep(v, now);
     g.globalCompositeOperation = 'source-over'; g.shadowBlur = 0;
@@ -179,7 +187,8 @@ export class Halo {
     const stretch = Math.min(0.5, Math.abs(v.vel) / 2600);            // smears a little when moving fast
     const off = sstep(fov / 2 - 2, fov / 2 + 14, Math.abs(rel));      // off-screen: flattens against the side
 
-    const A = clamp(U * (0.08 + 0.12 * v.size), 20, AMAX) * life * (level + kick);
+    const A0 = clamp(U * (0.08 + 0.12 * v.size), 20, AMAX) * life, A = A0 * (level + kick);
+    const rd = v.icon ? A0 * (f.hazard ? 0.72 : 0.6) : 0;            // smallest dome that holds the icon (bigger when it matters)
     const spread = clamp(U * (0.16 + 0.22 * v.size), 60, 300) * (1 + stretch) * (0.75 + 0.25 * Math.min(1, life));
     let lam = clamp(U * (0.19 - 0.145 * (f.freq ?? 0.5)), 9, 110);
     if (f.beat === 'wail') lam *= 1 + 0.3 * Math.sin(t * 2.6 + 1);   // the siren's pitch sweeping up and down
@@ -188,8 +197,10 @@ export class Halo {
       t, A, spread, lam, sharp, level, life, off, flow: f.flow || 0,
       speed: (0.25 + 0.6 * (f.freq ?? 0.5)) * (f.hazard ? 1.3 : 1),
       alpha: Math.min(1, age / 180) * Math.sqrt(fall),
-      bh: A * blob * (1 + 0.25 * sharp) * (1 - 0.3 * off),
-      bw: A * blob * (0.85 - 0.35 * sharp) * (1 + 0.7 * off),
+      bh: Math.max(A * blob * (1 + 0.25 * sharp) * (1 - 0.3 * off), rd),
+      bw: Math.max(A * blob * (0.85 - 0.35 * sharp) * (1 + 0.7 * off), rd),
+      bs: v.icon ? Math.min(sharp, 0.2) : sharp,                       // an icon needs a dome, not a spike
+      rd,
     };
   }
 
@@ -206,9 +217,17 @@ export class Halo {
       const wob = 0.7 + 0.3 * Math.sin(i * 2.39 + k.t * (1.1 + hash(i + v.seed)) + v.seed);
       h = k.A * 0.62 * (1 - x * x) ** 1.3 * (k.flow + (1 - k.flow) * b * wob);
     }
-    const y = Math.abs(s) / k.bw;       // the marker: a dome when soft, a spike when sharp
-    if (y < 1) { const dome = Math.sqrt(1 - y * y), spike = (1 - y) ** 1.6; h = smax(h, k.bh * (dome + (spike - dome) * k.sharp), k.A * 0.12 + 0.01); }
+    const m = this.dome(v, s);
+    if (m > 0) h = smax(h, m, k.A * 0.12 + 0.01);
     return Math.min(h, this.rim.R * 0.97);
+  }
+
+  // The marker that points at the sound: a dome when soft, a spike when sharp.
+  dome(v, s) {
+    const k = v.k, y = Math.abs(s) / k.bw;
+    if (!(y < 1)) return 0;
+    const round = Math.sqrt(1 - y * y), spike = (1 - y) ** 1.6;
+    return Math.min(k.bh * (round + (spike - round) * k.bs), this.rim.R * 0.97);
   }
 
   // A dark, faintly tinted shadow behind a wave so it reads over a bright camera image.
@@ -242,8 +261,8 @@ export class Halo {
     };
     const solid = 1 - 0.86 * (v.form.grain || 0), grown = Math.min(1, k.life);
     const e = (k.t * (0.45 + 0.5 * k.speed) + v.seed) % 1;
-    trace(1 + 0.5 * e, U * 0.07 * e * grown, false);
-    g.lineWidth = 1.5; g.strokeStyle = rgba(v.c2, 0.55 * (1 - e) ** 1.5 * k.alpha * (0.3 + 0.7 * solid)); g.stroke();
+    trace(1 + 0.4 * e, U * 0.06 * e * grown, false);
+    g.lineWidth = 1.5; g.strokeStyle = rgba(v.c2, 0.45 * (1 - e) ** 2 * k.alpha * (0.3 + 0.7 * solid)); g.stroke();
 
     trace(1, 0, true);
     rim.at(v.u, p);
@@ -280,12 +299,33 @@ export class Halo {
     }
   }
 
+  // The icon, upright in the marker dome. Dotted sounds get a solid dome first so the icon has
+  // something to sit on. The icon is a dark cut of the sound's own colour, so it reads on any dome.
+  badge(v) {
+    const { g, rim, p } = this, k = v.k, size = k.rd * 0.92;
+    if (k.alpha < 0.01 || size < 4) return;
+    const grain = v.form.grain || 0;
+    if (grain > 0.1) {
+      g.beginPath();
+      for (let s = -k.bw; s <= k.bw; s += 1.5) { const h = this.dome(v, s); rim.at(v.u + s, p); g.lineTo(p.x + p.nx * h, p.y + p.ny * h); }
+      for (const s of [k.bw, -k.bw]) { rim.at(v.u + s, p); g.lineTo(p.x - p.nx * 8, p.y - p.ny * 8); }
+      g.closePath(); g.fillStyle = rgba(v.c1, 0.9 * grain * k.alpha); g.fill();
+    }
+    rim.at(v.u, p);
+    const up = Math.max(k.bh * 0.46, size * 0.55), cx = p.x + p.nx * up, cy = p.y + p.ny * up;
+    g.globalCompositeOperation = 'source-over';
+    g.save(); g.translate(cx - size / 2, cy - size / 2); g.scale(size / 24, size / 24);
+    g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92 * k.alpha); g.fill(v.icon, 'evenodd');
+    g.restore();
+    g.globalCompositeOperation = 'screen';
+  }
+
   // Conversation: the marker dome swells with the voice, and bars either side flicker like a waveform
   // while someone is talking, dropping to dots in the pauses.
   speech(v) {
     const { g, rim, p, U, dpr } = this, k = v.k, E = BEATS.speech(k.t, v.seed);
     const r = k.A * (0.55 + 0.35 * E) * (v.form.blob ?? 0.8);
-    k.bh = r * (1 - 0.3 * k.off); k.bw = r * 0.95 * (1 + 0.6 * k.off);
+    k.bh = Math.max(r * (1 - 0.3 * k.off), k.rd); k.bw = Math.max(r * 0.95 * (1 + 0.6 * k.off), k.rd);
     this.body(v, -k.bw, k.bw);
     const gap = clamp(U * 0.026, 7, 15), w = gap * 0.5, base = w / 2 + 2;
     g.beginPath();
