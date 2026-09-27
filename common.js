@@ -8,27 +8,45 @@
 // `icon` names a shape in icons.js, drawn inside the dome that marks the sound's direction.
 // `form` is the wave's shape; halo.js explains each number.
 //   spiky ↔ soft (sharp) · dotted ↔ solid (grain) · large ↔ small (size) · tight ↔ broad waves (freq)
+// `hear` is what the microphone listener (listen.js) listens for: YAMNet labels, plus the score one window
+// needs to count (`weak`, confirmed by a second window) or to alert on its own (`strong`). Horn, siren,
+// alarm, doorbell and knock use the Synesthesia app's thresholds; the rest are provisional.
 export const SOUNDS = {
-  fire:     { label: 'Fire alarm', icon: 'alarm',    color: '#ff2e4d', core: '#ffb03a',
-              form: { size: 1,   sharp: .95, grain: .08, freq: .85, flow: .1,  blob: 1,   beat: 'alarm', hazard: true } },
+  fire:     { label: 'Alarm',      icon: 'alarm',    color: '#ff2e4d', core: '#ffb03a',
+              form: { size: 1,   sharp: .95, grain: .08, freq: .85, flow: .1,  blob: 1,   beat: 'alarm', hazard: true },
+              hear: { weak: .30, strong: .65, labels: ['Alarm', 'Fire alarm', 'Smoke detector, smoke alarm', 'Car alarm', 'Alarm clock', 'Buzzer'] } },
   siren:    { label: 'Siren',      icon: 'siren',    color: '#ff2e63', core: '#6f8bff',   // red and blue, like the lights
-              form: { size: 1,   sharp: .7,  grain: 0,   freq: .7,  flow: .25, blob: .9,  beat: 'wail', hazard: true } },
+              form: { size: 1,   sharp: .7,  grain: 0,   freq: .7,  flow: .25, blob: .9,  beat: 'wail', hazard: true },
+              hear: { weak: .25, strong: .60, labels: ['Siren', 'Police car (siren)', 'Ambulance (siren)', 'Fire engine, fire truck (siren)', 'Civil defense siren'] } },
   truck:    { label: 'Truck horn', icon: 'airhorn',  color: '#ff4a2e', core: '#ffb347',
-              form: { size: 1,   sharp: .8,  grain: 0,   freq: .3,  flow: .15, blob: 1,   beat: 'blast', hazard: true } },
+              form: { size: 1,   sharp: .8,  grain: 0,   freq: .3,  flow: .15, blob: 1,   beat: 'blast', hazard: true },
+              hear: { weak: .25, strong: .55, labels: ['Air horn, truck horn'] } },
   horn:     { label: 'Car horn',   icon: 'horn',     color: '#ff6a1a', core: '#ffe14d',
-              form: { size: .9,  sharp: .85, grain: 0,   freq: .55, flow: .05, blob: 1,   beat: 'honk', hazard: true } },
+              form: { size: .9,  sharp: .85, grain: 0,   freq: .55, flow: .05, blob: 1,   beat: 'honk', hazard: true },
+              hear: { weak: .25, strong: .55, labels: ['Vehicle horn, car horn, honking', 'Toot'] } },
   bus:      { label: 'Bus',        icon: 'bus',      color: '#ff8c1a', core: '#ff4f3a',
-              form: { size: .95, sharp: .1,  grain: .05, freq: .08, flow: .5,  blob: .75, beat: 'rumble', hazard: true } },
+              form: { size: .95, sharp: .1,  grain: .05, freq: .08, flow: .5,  blob: .75, beat: 'rumble', hazard: true },
+              hear: { weak: .35, strong: .65, labels: ['Bus'] } },
   bike:     { label: 'Bike bell',  icon: 'bikebell', color: '#ffb21f', core: '#fff07a',
-              form: { size: .6,  sharp: .6,  grain: 0,   freq: .95, flow: 0,   blob: .8,  beat: 'ring', hazard: true } },
+              form: { size: .6,  sharp: .6,  grain: 0,   freq: .95, flow: 0,   blob: .8,  beat: 'ring', hazard: true },
+              hear: { weak: .25, strong: .55, labels: ['Bicycle bell'] } },
   crackle:  { label: 'Crackling',  icon: 'leaf',     color: '#f5c542', core: '#fff2b0',
-              form: { size: .5,  sharp: .5,  grain: .95, freq: .6,  flow: 0,   blob: .3,  beat: 'crackle' } },
-  name:     { label: 'Your name',  icon: 'speech',   color: '#3d7bff', core: '#7ce8ff',
+              form: { size: .5,  sharp: .5,  grain: .95, freq: .6,  flow: 0,   blob: .3,  beat: 'crackle' },
+              hear: { weak: .30, strong: .60, labels: ['Crackle', 'Rustling leaves', 'Crumpling, crinkling'] } },
+  name:     { label: 'Your name',  icon: 'person',   color: '#3d7bff', core: '#7ce8ff',   // not heard yet: needs a name-spotting model
               form: { size: .7,  blob: .8, bars: true } },
+  speech:   { label: 'Talking',    icon: 'speech',   color: '#4f9dff', core: '#c2e4ff',
+              form: { size: .55, blob: .7, bars: true },
+              hear: { weak: .30, strong: .60, labels: ['Speech', 'Conversation', 'Narration, monologue'] } },
   doorbell: { label: 'Doorbell',   icon: 'bell',     color: '#14d2b9', core: '#8dffd9',
-              form: { size: .6,  sharp: 0,   grain: .15, freq: .4,  flow: 0,   blob: .9,  beat: 'chime' } },
+              form: { size: .6,  sharp: 0,   grain: .15, freq: .4,  flow: 0,   blob: .9,  beat: 'chime' },
+              hear: { weak: .20, strong: .50, labels: ['Doorbell', 'Ding-dong'] } },
+  knock:    { label: 'Knocking',   icon: 'door',     color: '#22b8e0', core: '#aef0ff',
+              form: { size: .55, sharp: .45, grain: .1,  freq: .45, flow: 0,   blob: .85, beat: 'knock' },
+              hear: { weak: .20, strong: .50, labels: ['Knock'] } },
   ambient:  { label: 'Ambient',    icon: 'music',    color: '#7b5cff', core: '#e08cff',
-              form: { size: .4,  freq: .15, beat: 'breathe', omni: true } },
+              form: { size: .4,  freq: .15, beat: 'breathe', omni: true },
+              hear: { weak: .35, strong: .60, labels: ['Music', 'Hubbub, speech noise, speech babble', 'Crowd', 'Chatter'] } },
   behind:   { label: 'Unknown',    icon: 'ear',      color: '#a66bff', core: '#6b7bff',   // used by the real mic detector
               form: { size: .6,  sharp: .2,  grain: .3,  freq: .5,  flow: .2,  blob: .8,  beat: 'breathe' } },
 };

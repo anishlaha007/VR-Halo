@@ -23,6 +23,9 @@
 //   hazard      bigger surge on arrival
 //   omni        no single source (ambient): a soft band around the whole edge, fuller on its side
 // A sound's `icon` (icons.js) sits upright inside the marker, which grows into a dome big enough to hold it.
+//
+// A sound that was heard but not located (the microphone listener knows what, not where) has no side to
+// grow from: its ripples circle the whole edge instead, and a chip above the bottom edge names it.
 import { wrap } from '/common.js';
 import { iconPath } from '/icons.js';
 
@@ -123,14 +126,22 @@ export class Halo {
   // otherwise it fills the window.
   use(canvas, size = null, dpr = 1) { this.cv = canvas; this.g = canvas.getContext('2d'); this.size = size; this.fixedDpr = dpr; this.W = 0; }
 
-  // a: { key, color, core, form, yaw, ttl, level, alert }. yaw = world direction in degrees.
+  // a: { key, color, core, icon, label, form, yaw, ttl, level, alert, kick, live }. yaw = world direction in
+  // degrees, or null for a sound heard but not located. live() (optional) is the sound's loudness right now,
+  // 0–1; the wave follows it instead of its usual rhythm. kick: false refreshes a wave without a pulse.
   // The same sound again from about the same direction keeps the wave alive instead of stacking a second one.
   add(a, now = performance.now()) {
-    const f = a.form || {}, ttl = a.ttl || 6000;
-    const same = this.voices.find(v => v.key === a.key && v.end - now > FADE && (f.omni || Math.abs(wrap(v.yaw - a.yaw)) < 30));
-    if (same) { Object.assign(same, { yaw: a.yaw, end: now + ttl, fadeLen: FADE, kick: now }); if (a.alert) same.sweep = now; return same; }
+    const f = a.form || {}, ttl = a.ttl || 6000, around = a.yaw == null, size = clamp(+(a.level ?? f.size ?? 0.6) || 0.6, 0, 1);
+    const same = this.voices.find(v => v.key === a.key && v.end - now > FADE && v.around === around
+      && (around || f.omni || Math.abs(wrap(v.yaw - a.yaw)) < 30));
+    if (same) {
+      Object.assign(same, { yaw: a.yaw, end: now + ttl, fadeLen: FADE, size });
+      if (a.kick !== false) same.kick = now;
+      if (a.alert) same.sweep = now;
+      return same;
+    }
     const v = {
-      key: a.key, form: f, yaw: a.yaw, size: clamp(+(a.level ?? f.size ?? 0.6) || 0.6, 0, 1),
+      key: a.key, form: f, yaw: a.yaw, around, size, sz: size, label: a.label || a.key, live: a.live || null,
       c1: rgb(a.color), c2: rgb(a.core || a.color), icon: iconPath(a.icon), born: now, end: now + ttl, fadeLen: FADE,
       kick: 0, sweep: a.alert ? now : 0, seed: Math.random() * 100, u: null, vel: 0, dots: [], acc: 0,
     };
@@ -159,16 +170,19 @@ export class Halo {
     this.voices = this.voices.filter(v => now < v.end);
     this.voices.sort((a, b) => !!b.form.omni - !!a.form.omni);   // ambient underneath
     for (const v of this.voices) this.step(v, now, dt, heading, fov);
-    for (const v of this.voices) if (!v.form.omni) this.scrim(v);
+    const heard = this.voices.filter(v => v.around);
+    if (heard.length) this.vignette(heard);
+    for (const v of this.voices) if (!v.form.omni && !v.around) this.scrim(v);
     g.globalCompositeOperation = 'screen';                         // overlapping sounds mix their colours
     for (const v of this.voices) {
       if (v.form.omni) { this.omni(v); continue; }
       if (v.form.bars) this.speech(v);
       else { this.body(v, -v.k.spread, v.k.spread); this.grain(v, now, dt); }
-      if (v.icon) this.badge(v);
+      if (v.icon && !v.around) this.badge(v);
     }
     for (const v of this.voices) if (v.sweep) this.sweep(v, now);
     g.globalCompositeOperation = 'source-over'; g.shadowBlur = 0;
+    if (heard.length) this.captions(heard);
   }
 
   // Everything about a voice for this frame: where it sits, how big, how far through its life.
@@ -177,22 +191,27 @@ export class Halo {
     const rise = backOut(Math.min(1, age / 650), f.hazard ? 2.4 : 1.5);
     const fall = sstep(0, v.fadeLen, v.end - now);
     const kick = v.kick ? 0.3 * Math.exp(-(now - v.kick) / 280) : 0;
-    const level = f.bars ? 1 : (BEATS[f.beat] || BEATS.breathe)(t, v.seed);
+    const level = v.live ? 0.4 + 0.85 * v.live() : f.bars ? 1 : (BEATS[f.beat] || BEATS.breathe)(t, v.seed);
     const life = rise * fall;
+    v.sz += (v.size - v.sz) * (1 - Math.exp(-dt * 3));             // a new loudness eases in
 
-    const rel = wrap(v.yaw - heading), target = rim.toU(rel, fov);
-    if (v.u == null) v.u = target;
-    const d = rim.wrapU(target - v.u) * (1 - Math.exp(-dt * 12));   // glide, don't jump, when you turn
-    v.u = rim.wrapU(v.u + d); v.vel = dt ? d / dt : 0;
-    const stretch = Math.min(0.5, Math.abs(v.vel) / 2600);            // smears a little when moving fast
-    const off = sstep(fov / 2 - 2, fov / 2 + 14, Math.abs(rel));      // off-screen: flattens against the side
+    let off = 0, stretch = 0;
+    if (v.around) v.u = 0;                                           // heard, not located: centred, drawn all round
+    else {
+      const rel = wrap(v.yaw - heading), target = rim.toU(rel, fov);
+      if (v.u == null) v.u = target;
+      const d = rim.wrapU(target - v.u) * (1 - Math.exp(-dt * 12));   // glide, don't jump, when you turn
+      v.u = rim.wrapU(v.u + d); v.vel = dt ? d / dt : 0;
+      stretch = Math.min(0.5, Math.abs(v.vel) / 2600);              // smears a little when moving fast
+      off = sstep(fov / 2 - 2, fov / 2 + 14, Math.abs(rel));        // off-screen: flattens against the side
+    }
 
-    const A0 = clamp(U * (0.08 + 0.12 * v.size), 20, AMAX) * life, A = A0 * (level + kick);
-    const rd = v.icon ? A0 * (f.hazard ? 0.72 : 0.6) : 0;            // smallest dome that holds the icon (bigger when it matters)
-    const spread = clamp(U * (0.16 + 0.22 * v.size), 60, 300) * (1 + stretch) * (0.75 + 0.25 * Math.min(1, life));
+    const A0 = clamp(U * (0.08 + 0.12 * v.sz), 20, AMAX) * life * (v.around ? (f.hazard ? 0.55 : 0.4) : 1), A = A0 * (level + kick);
+    const rd = v.icon && !v.around ? A0 * (f.hazard ? 0.72 : 0.6) : 0;   // smallest dome that holds the icon (bigger when it matters)
+    const spread = v.around ? rim.half : clamp(U * (0.16 + 0.22 * v.sz), 60, 300) * (1 + stretch) * (0.75 + 0.25 * Math.min(1, life));
     let lam = clamp(U * (0.19 - 0.145 * (f.freq ?? 0.5)), 9, 110);
     if (f.beat === 'wail') lam *= 1 + 0.3 * Math.sin(t * 2.6 + 1);   // the siren's pitch sweeping up and down
-    const blob = f.blob ?? 0.8, sharp = f.sharp || 0;
+    const blob = v.around ? 0 : f.blob ?? 0.8, sharp = f.sharp || 0;
     v.k = {
       t, A, spread, lam, sharp, level, life, off, flow: f.flow || 0,
       speed: (0.25 + 0.6 * (f.freq ?? 0.5)) * (f.hazard ? 1.3 : 1),
@@ -206,6 +225,7 @@ export class Halo {
 
   // Wave height (px, into the screen) at s px along the edge from the voice's centre.
   h(v, s) {
+    if (v.around) return Math.min(this.ring(v, s), this.rim.R * 0.97);
     const k = v.k, x = s / k.spread;
     if (!(x > -1 && x < 1)) return 0;
     let h = 0;
@@ -222,12 +242,32 @@ export class Halo {
     return Math.min(h, this.rim.R * 0.97);
   }
 
+  // A sound heard but not located: the same ripples, all the way round the edge, circling slowly.
+  // (A whole number of ripples fits the loop, so it has no seam.)
+  ring(v, u) {
+    const k = v.k, half = this.rim.half, n = Math.max(8, Math.round(2 * half / k.lam)), lam = 2 * half / n;
+    const p = (u + half) / lam + k.t * k.speed * 0.5, i = Math.floor(p), fr = p - i, j = ((i % n) + n) % n;
+    const round = Math.sin(Math.PI * fr) ** 0.55, tri = 1 - Math.abs(2 * fr - 1);
+    const b = round + (tri * tri * Math.sqrt(tri) - round) * k.sharp;
+    const wob = 0.7 + 0.3 * Math.sin(j * 2.39 + k.t * (1.1 + hash(j + v.seed)) + v.seed);
+    const swell = 0.75 + 0.25 * Math.sin(2 * Math.PI * u / half + k.t * 0.8 + v.seed);   // a slow swell going round
+    return k.A * 0.62 * swell * (0.15 + 0.5 * k.flow + 0.85 * (1 - k.flow) * b * wob);
+  }
+
   // The marker that points at the sound: a dome when soft, a spike when sharp.
   dome(v, s) {
     const k = v.k, y = Math.abs(s) / k.bw;
     if (!(y < 1)) return 0;
     const round = Math.sqrt(1 - y * y), spike = (1 - y) ** 1.6;
     return Math.min(k.bh * (round + (spike - round) * k.bs), this.rim.R * 0.97);
+  }
+
+  // Heard sounds have no side, so the whole edge darkens a little behind their ring instead.
+  vignette(list) {
+    const { g, W, H, U } = this, a = Math.max(...list.map(v => v.k.alpha));
+    const gr = g.createRadialGradient(W / 2, H / 2, U * 0.35, W / 2, H / 2, Math.hypot(W, H) / 2);
+    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, rgba([0, 0, 0], 0.35 * a));
+    g.fillStyle = gr; g.fillRect(0, 0, W, H);
   }
 
   // A dark, faintly tinted shadow behind a wave so it reads over a bright camera image.
@@ -243,7 +283,7 @@ export class Halo {
   // The solid shape between s = from and s = to: an echo of its outline that swells outward and
   // fades (the sound travelling), then the glowing core.
   body(v, from, to) {
-    const { g, rim, p, U, dpr } = this, k = v.k;
+    const { g, rim, p, U, W, H, dpr } = this, k = v.k;
     if (k.alpha < 0.004 || k.A < 0.5) return;
     const ds = clamp(k.lam / 12, 1.25, 3), n = Math.ceil((to - from) / ds) + 1;
     if (this.buf.x.length < n) for (const key of ['x', 'y', 'nx', 'ny', 'h', 'e']) this.buf[key] = new Float32Array(n * 2);
@@ -251,7 +291,7 @@ export class Halo {
     for (let i = 0; i < n; i++) {
       const s = Math.min(to, from + i * ds), q = s / k.spread;
       rim.at(v.u + s, p); X[i] = p.x; Y[i] = p.y; NX[i] = p.nx; NY[i] = p.ny;
-      Hs[i] = this.h(v, s); E[i] = q > -1 && q < 1 ? (1 - q * q) ** 2 : 0;
+      Hs[i] = this.h(v, s); E[i] = v.around ? 1 : q > -1 && q < 1 ? (1 - q * q) ** 2 : 0;
     }
     const out = 8;                     // the base runs just outside the screen, so the wave rises out of the edge
     const trace = (mul, add, closed) => {
@@ -266,7 +306,8 @@ export class Halo {
 
     trace(1, 0, true);
     rim.at(v.u, p);
-    const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(k.spread, k.bh, 1));
+    const gr = v.around ? g.createRadialGradient(W / 2, H / 2, U * 0.42, W / 2, H / 2, Math.hypot(W, H) / 2)   // all round: hot on the sides nearest the middle
+      : g.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(k.spread, k.bh, 1));
     gr.addColorStop(0, rgba(v.c2, k.alpha * solid)); gr.addColorStop(0.28, rgba(v.c1, k.alpha * solid)); gr.addColorStop(1, rgba(v.c1, 0.88 * k.alpha * solid));
     g.shadowColor = rgba(v.c1, 0.6 * k.alpha); g.shadowBlur = clamp(k.A * 0.3, 6, 28) * dpr;
     g.fillStyle = gr; g.fill();
@@ -282,7 +323,7 @@ export class Halo {
       while (v.acc >= 1) {
         v.acc -= 1;
         let s0 = 0;
-        for (let j = 0; j < 6; j++) { s0 = (Math.random() * 2 - 1) * k.spread; const x = s0 / k.spread; if (Math.random() < (1 - x * x) ** 2 + 0.05) break; }
+        for (let j = 0; j < 6; j++) { s0 = (Math.random() * 2 - 1) * k.spread; const x = s0 / k.spread; if (v.around || Math.random() < (1 - x * x) ** 2 + 0.05) break; }
         const m = crackle ? 3 + (Math.random() * 6 | 0) : 1;
         for (let j = 0; j < m; j++) v.dots.push({
           s: s0 + (crackle ? (Math.random() - 0.5) * U * 0.09 : 0), f: Math.random() ** 0.7 * (crackle ? 2.2 : 1.3), drift: Math.random(), hot: Math.random() < 0.5,
@@ -322,26 +363,35 @@ export class Halo {
 
   // Conversation: the marker dome swells with the voice, and bars either side flicker like a waveform
   // while someone is talking, dropping to dots in the pauses.
+  // Heard but not located: bars all the way round, a voice waveform wrapped round the frame.
+  // With a live loudness the bars move with the actual voice.
   speech(v) {
-    const { g, rim, p, U, dpr } = this, k = v.k, E = BEATS.speech(k.t, v.seed);
-    const r = k.A * (0.55 + 0.35 * E) * (v.form.blob ?? 0.8);
-    k.bh = Math.max(r * (1 - 0.3 * k.off), k.rd); k.bw = Math.max(r * 0.95 * (1 + 0.6 * k.off), k.rd);
-    this.body(v, -k.bw, k.bw);
-    const gap = clamp(U * 0.026, 7, 15), w = gap * 0.5, base = w / 2 + 2;
-    g.beginPath();
-    for (let i = 1; ; i++) {
-      const s = k.bw + gap * (i - 0.2);
-      if (s > k.spread) break;
-      const x = s / k.spread, env = (1 - x * x) ** 1.5;
-      for (const side of [1, -1]) {
-        const lv = 0.1 + 0.9 * E * (0.3 + 0.7 * noise(k.t * 8.5 + i * 1.93, v.seed + i * 3 + (side < 0 ? 40 : 0)));
-        const len = Math.max(0.5, k.A * 0.8 * env * lv);
-        rim.at(v.u + side * s, p);
-        g.moveTo(p.x + p.nx * base, p.y + p.ny * base); g.lineTo(p.x + p.nx * (base + len), p.y + p.ny * (base + len));
+    const { g, rim, p, U, W, H, dpr } = this, k = v.k, E = v.live ? v.live() : BEATS.speech(k.t, v.seed);
+    const gap = clamp(U * 0.026, 7, 15), w = gap * 0.5, base = w / 2 + 2, bars = [];
+    const lv = (i, side) => 0.1 + 0.9 * E * (0.3 + 0.7 * noise(k.t * 8.5 + i * 1.93, v.seed + i * 3 + (side < 0 ? 40 : 0)));
+    if (v.around) {
+      const n = Math.floor(2 * rim.half / gap);
+      for (let i = 0; i < n; i++) bars.push([-rim.half + (i + 0.5) * 2 * rim.half / n, k.A * 0.7 * lv(i, 1)]);
+    } else {
+      const r = k.A * (0.55 + 0.35 * E) * (v.form.blob ?? 0.8);
+      k.bh = Math.max(r * (1 - 0.3 * k.off), k.rd); k.bw = Math.max(r * 0.95 * (1 + 0.6 * k.off), k.rd);
+      this.body(v, -k.bw, k.bw);
+      for (let i = 1; ; i++) {
+        const s = k.bw + gap * (i - 0.2);
+        if (s > k.spread) break;
+        const x = s / k.spread, env = (1 - x * x) ** 1.5;
+        for (const side of [1, -1]) bars.push([side * s, k.A * 0.8 * env * lv(i, side)]);
       }
     }
+    g.beginPath();
+    for (const [s, l] of bars) {
+      const len = Math.max(0.5, l);
+      rim.at(v.u + s, p);
+      g.moveTo(p.x + p.nx * base, p.y + p.ny * base); g.lineTo(p.x + p.nx * (base + len), p.y + p.ny * (base + len));
+    }
     rim.at(v.u, p);
-    const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(k.spread, 1));
+    const gr = v.around ? g.createRadialGradient(W / 2, H / 2, U * 0.42, W / 2, H / 2, Math.hypot(W, H) / 2)
+      : g.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(k.spread, 1));
     gr.addColorStop(0, rgba(v.c2, k.alpha)); gr.addColorStop(0.35, rgba(v.c1, k.alpha)); gr.addColorStop(1, rgba(v.c1, 0.8 * k.alpha));
     g.lineWidth = w; g.lineCap = 'round'; g.strokeStyle = gr;
     g.shadowColor = rgba(v.c1, 0.6 * k.alpha); g.shadowBlur = 8 * dpr;
@@ -355,7 +405,7 @@ export class Halo {
     g.beginPath(); g.rect(-80, -80, W + 160, H + 160);
     for (let i = 0; i <= n; i++) {
       const u = -half + (2 * half * i) / n, phi = (u / half) * Math.PI;
-      const near = 0.5 + 0.5 * Math.cos((rim.wrapU(u - v.u) / half) * Math.PI);
+      const near = v.around ? 0.5 : 0.5 + 0.5 * Math.cos((rim.wrapU(u - v.u) / half) * Math.PI);
       const lump = clamp(0.45 + 0.3 * Math.sin(3 * phi + k.t * 0.7 + v.seed) + 0.22 * Math.sin(5 * phi - k.t * 0.9 + v.seed * 2) + 0.14 * Math.sin(9 * phi + k.t * 1.3), 0.06, 1.2) ** 1.4;
       const h = Math.min(k.A * (0.06 + 0.5 * near ** 1.5) * lump + 2, rim.R * 0.97);
       rim.at(u, p);
@@ -375,8 +425,9 @@ export class Halo {
     if (q < 0.45) {
       g.beginPath();
       for (let u = -rim.half; u <= rim.half; u += 24) { rim.at(u, p); g.lineTo(p.x + p.nx * inset, p.y + p.ny * inset); }
-      g.closePath(); g.lineWidth = 10; g.strokeStyle = rgba(v.c1, 0.3 * (1 - q / 0.45) * v.k.alpha); g.stroke();
+      g.closePath(); g.lineWidth = 10; g.strokeStyle = rgba(v.c1, (v.around ? 0.5 : 0.3) * (1 - q / 0.45) * v.k.alpha); g.stroke();
     }
+    if (v.around) return;                                            // nowhere to run from: the flash is the signal
     for (const side of [1, -1]) {
       const head = v.u + side * e * rim.half;
       for (let j = 0; j < 12; j++) {
@@ -385,6 +436,44 @@ export class Halo {
         rim.at(head - side * (j + 1) * step, p); g.lineTo(p.x + p.nx * inset, p.y + p.ny * inset);
         g.lineWidth = 6 - j * 0.4; g.strokeStyle = rgba(j < 2 ? v.c2 : v.c1, fade * (1 - j / 12)); g.stroke();
       }
+    }
+  }
+
+  // A chip for each sound heard but not located, centred just above the bottom edge: its icon in a dome of
+  // its colours, and its name, since there's no direction to show. Icons only if the names don't fit.
+  captions(list) {
+    const { g, W, H, U, dpr } = this;
+    const hgt = clamp(U * 0.085, 30, 46), r = hgt / 2 - 4, pad = 12, gap = 8;
+    g.font = `600 ${clamp(U * 0.036, 12, 17).toFixed(1)}px ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif`;
+    g.textBaseline = 'middle'; g.textAlign = 'left';
+    list.sort((a, b) => !!b.form.hazard - !!a.form.hazard || a.born - b.born);
+    const chips = list.map(v => ({ v, w: hgt + g.measureText(v.label).width + pad }));
+    let total = chips.reduce((sum, c) => sum + c.w, 0) + gap * (chips.length - 1);
+    const named = total <= W - 24;
+    if (!named) { for (const c of chips) c.w = hgt; total = hgt * chips.length + gap * (chips.length - 1); }
+    let x = W / 2 - total / 2;
+    const y = H - clamp(U * 0.2, 20, AMAX) * 0.62 - 14 - hgt / 2;   // clear of the tallest ring
+    for (const { v, w } of chips) {
+      const k = v.k, sc = clamp(k.life, 0, 1.2);
+      if (k.alpha > 0.01 && sc > 0.02) {
+        g.save(); g.translate(x + w / 2, y); g.scale(sc, sc); g.globalAlpha = clamp(k.alpha, 0, 1);
+        g.beginPath(); g.roundRect(-w / 2, -hgt / 2, w, hgt, hgt / 2);
+        g.fillStyle = 'rgba(12,10,24,.74)'; g.fill();
+        g.lineWidth = 1; g.strokeStyle = 'rgba(243,240,255,.14)'; g.stroke();
+        const bx = -w / 2 + hgt / 2, gr = g.createRadialGradient(bx, r, 0, bx, 0, r * 1.6);
+        gr.addColorStop(0, rgba(v.c2, 1)); gr.addColorStop(0.65, rgba(v.c1, 1));
+        g.beginPath(); g.arc(bx, 0, r, 0, 7); g.fillStyle = gr;
+        g.shadowColor = rgba(v.c1, 0.7); g.shadowBlur = 10 * dpr; g.fill(); g.shadowBlur = 0;
+        if (v.icon) {
+          const s = r * 1.3;
+          g.save(); g.translate(bx - s / 2, -s / 2); g.scale(s / 24, s / 24);
+          g.fillStyle = rgba(v.c1.map(c => c * 0.14 | 0), 0.92); g.fill(v.icon, 'evenodd');
+          g.restore();
+        }
+        if (named) { g.fillStyle = '#f3f0ff'; g.fillText(v.label, bx + r + 8, 1); }
+        g.restore();
+      }
+      x += w + gap;
     }
   }
 }

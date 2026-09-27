@@ -49,8 +49,9 @@ import { SOUNDS, resolve } from '/common.js';
 import { Halo } from '/halo.js';
 import { iconSvg } from '/icons.js';
 
-// where the sound is, relative to where you look (the frame shows a 70° field of view)
-const POS = { 'in front': 0, 'moving': 22, 'corner': 34, 'off-screen': 95, 'behind': 170 };
+// where the sound is, relative to where you look (the frame shows a 70° field of view);
+// "heard" = picked up by the microphone listener, which knows what a sound is but not where
+const POS = { 'in front': 0, 'moving': 22, 'corner': 34, 'off-screen': 95, 'behind': 170, 'heard': null };
 let pos = 'in front';
 const cells = [];
 
@@ -68,7 +69,7 @@ function place() {
   for (const c of cells) {
     const a = resolve({ sound: c.key });
     c.halo.voices = [];
-    c.halo.add({ key: c.key, color: a.color, core: a.core, icon: a.icon, form: a.form, yaw: POS[pos], ttl: 1e9 });
+    c.halo.add({ key: c.key, color: a.color, core: a.core, icon: a.icon, label: a.label, form: a.form, yaw: POS[pos], ttl: 1e9 });
   }
 }
 for (const k of Object.keys(POS)) {

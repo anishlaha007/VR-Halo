@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import itertools
 import json
+import mimetypes
 import os
 import shutil
 import socket
@@ -31,6 +32,16 @@ import time
 from aiohttp import WSMsgType, web
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+# Older Pythons (like the one on macOS) may not know these, and browsers refuse modules and wasm served
+# as anything else. Newer aiohttp keeps its own table, so tell both.
+TYPES = {".mjs": "text/javascript", ".wasm": "application/wasm", ".tflite": "application/octet-stream"}
+for ext, kind in TYPES.items():
+    mimetypes.add_type(kind, ext)
+    try:
+        from aiohttp import web_fileresponse
+        web_fileresponse.CONTENT_TYPES.add_type(kind, ext)
+    except (ImportError, AttributeError):
+        pass
 CLIENTS: dict = {}            # websocket -> role ("remote", "display", "mic", ...)
 IDS = itertools.count(1)
 LAST_MIC_ALERT = 0.0
@@ -277,6 +288,7 @@ def main() -> None:
     app.router.add_get("/common.js", page("common.js"))
     app.router.add_get("/halo.js", page("halo.js"))
     app.router.add_get("/icons.js", page("icons.js"))
+    app.router.add_get("/listen.js", page("listen.js"))
     app.router.add_static("/vendor", os.path.join(HERE, "vendor"))
 
     ip = lan_ip()
