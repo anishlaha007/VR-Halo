@@ -201,7 +201,7 @@ nav #bar{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc((100
           <button class="chip" id="calib" title="Stand right in front of the wearer, point this phone at them, and tap">Calibrate</button>
         </div>
       </div>
-      <p class="hint">You are the sound. Point this phone at the wearer and tap a sound: it plays here, and the display shows it where you're standing. Hold a sound to keep it going while you walk round them, still pointing at them.</p>
+      <p class="hint">You are the sound. Point this phone at the wearer and tap a sound: it plays here, and the display shows it where you're standing. Hold a sound to keep it going while you walk round them, still pointing at them. Your name, talking, shouting and laughter don't play: you do those, and the display shows them (hold while you talk).</p>
       <div id="hereGroups"></div>
       <div class="grid" id="herePicker"></div>
     </section>
@@ -543,6 +543,10 @@ $('clear').onclick = () => {
 // shows on the display from where you stand, and follows you (still pointing at them) while it plays. Hold a
 // sound to keep it going. Lined up by the two compasses, or by hand: stand in front of them, point, Calibrate.
 const whereAmI = () => { const f = facingNow(); return f == null ? null : wrap(f + 180); };
+// People sounds you make yourself: here they're just buttons. The display shows them from where you stand;
+// the phone stays quiet.
+const QUIET = new Set(['name', 'speech', 'shout', 'laugh']);
+const YOU = '<svg class="loopmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/><title>You make this one: the phone stays quiet</title></svg>';
 const hereRel = () => { const p = whereAmI(); return p == null ? null : wrap(p - wearer.heading); };
 const r1 = (x) => x == null ? null : Math.round(x * 10) / 10;
 let hereGroup = SOUNDS[current]?.group || 'danger', herePress = null;
@@ -560,7 +564,7 @@ function drawHere() {
     if (s.group !== hereGroup) continue;
     const b = document.createElement('button');
     b.className = 'snd'; b.style.setProperty('--c', s.color); b.dataset.k = key;
-    b.innerHTML = badge(s) + s.label + (s.loop ? LOOP : '');
+    b.innerHTML = badge(s) + s.label + (QUIET.has(key) ? YOU : s.loop ? LOOP : '');
     // a tap plays it once; held, it keeps going until let go. (Played on release, so a swipe plays nothing.)
     b.addEventListener('pointerdown', (e) => {
       if (herePress) return;
@@ -587,7 +591,7 @@ function hereStart(key, b, held) {
   const track = Math.random().toString(36).slice(2, 10), len = audio().length(key), rel = hereRel(), now = performance.now();
   hub.send({ type: 'alert', sound: key, angle: r1(rel), track, ttl: held ? 2500 : Math.round(len * 1000) + 1500 });
   const e = { key, b, track, until: held ? Infinity : now + len * 1000, sentAt: now, sentRel: rel };
-  if (held) e.hold = audio().hold(key); else e.voice = audio().play(key);   // from this phone's speaker: no panning, it IS the place
+  if (!QUIET.has(key)) { if (held) e.hold = audio().hold(key); else e.voice = audio().play(key); }   // from this phone's speaker: no panning, it IS the place
   b.classList.add('playing'); here.set(track, e); buzz(12);
   return track;
 }
