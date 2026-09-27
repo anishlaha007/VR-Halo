@@ -61,7 +61,13 @@ nav #bar{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc((100
 @keyframes beam{0%{opacity:0;stroke-dashoffset:var(--len)}15%{opacity:1}35%{stroke-dashoffset:0}100%{opacity:0;stroke-dashoffset:0}}
 .fade{animation:fade 1.8s ease-out forwards}
 @keyframes fade{0%,55%{opacity:1}100%{opacity:0}}
-.head{transition:transform .25s}
+#sync{display:flex;align-items:center;gap:8px;min-height:30px}
+#sync .t{flex:1;min-width:0;font-size:11.5px;line-height:1.3;color:var(--dim);text-align:center}
+.chip{flex:none;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;background:none;color:var(--mut);padding:6px 11px;font:600 12px var(--font);cursor:pointer;white-space:nowrap}
+.chip svg{width:13px;height:13px;fill:currentColor}
+.chip.on{color:#fff;border-color:rgba(255,61,127,.55);background:linear-gradient(100deg,rgba(255,106,77,.22),rgba(255,61,127,.22) 55%,rgba(122,75,255,.22))}
+#head.away{opacity:.45}
+.nlbl{font:800 8px var(--font);fill:#ff8a6a;text-anchor:middle;dominant-baseline:middle}
 #readout{text-align:center;min-height:40px}
 #readout .main{display:inline-flex;align-items:center;gap:8px;font-size:15.5px;font-weight:700}
 #readout .main .badge{width:22px;height:22px}
@@ -110,33 +116,44 @@ nav #bar{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc((100
     <section class="page" id="aim">
       <div id="groups"></div>
       <div class="grid" id="picker"></div>
+      <!-- the dial is the room seen from above, with the wearer in the middle, turning as they turn.
+           With "Turn with me" it also turns with this phone, so its top is always the way you face. -->
+      <div id="sync">
+        <button class="chip" id="follow" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 2.5l6.5 18-6.5-4.2-6.5 4.2z"/></svg>Turn with me</button>
+        <span class="t" id="syncText"></span>
+        <button class="chip" id="alignBtn" title="Point this phone the way the wearer faces, then tap">Align</button>
+      </div>
       <div id="dialWrap">
-        <div id="dial" aria-label="Tap a direction. Top is ahead, bottom is behind.">
+        <div id="dial" aria-label="The room from above, with the wearer in the middle. Tap where a sound is.">
           <svg viewBox="-100 -100 200 200">
             <defs>
               <radialGradient id="dbg" r="1"><stop offset="0" stop-color="#2a1216" stop-opacity=".85"/><stop offset=".7" stop-color="#1a0b0e" stop-opacity=".78"/><stop offset="1" stop-color="#12080a" stop-opacity=".7"/></radialGradient>
               <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff6a4d"/><stop offset=".5" stop-color="#ff3d7f"/><stop offset="1" stop-color="#7a4bff"/></linearGradient>
+              <radialGradient id="viewg" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="96"><stop offset="0" stop-color="#ffd9c8" stop-opacity=".32"/><stop offset=".6" stop-color="#ff8a9a" stop-opacity=".1"/><stop offset="1" stop-color="#ff3d7f" stop-opacity=".03"/></radialGradient>
             </defs>
             <circle r="96" fill="url(#dbg)" stroke="url(#rim)" stroke-opacity=".55" stroke-width="1"/>
-            <path d="M0 0 L67.9 67.9 A96 96 0 0 1 -67.9 67.9 Z" fill="#ff2a3a" fill-opacity=".08"/>
+            <g id="world" stroke="rgba(255,243,234,.28)" stroke-linecap="round"></g>
             <circle r="64" fill="none" stroke="rgba(255,243,234,.1)" stroke-width=".6"/>
             <circle r="32" fill="none" stroke="rgba(255,243,234,.1)" stroke-width=".6"/>
-            <g stroke="rgba(255,243,234,.1)" stroke-width=".6" id="spokes"></g>
-            <text class="lbl" y="-85">AHEAD</text>
-            <text class="lbl back" y="86">BEHIND</text>
-            <text class="lbl" x="-84" y="0" transform="rotate(-90 -84 0)">LEFT</text>
-            <text class="lbl" x="84" y="0" transform="rotate(90 84 0)">RIGHT</text>
+            <g id="wearer">
+              <path id="view" fill="url(#viewg)"/>
+              <path d="M0 0 L67.9 67.9 A96 96 0 0 1 -67.9 67.9 Z" fill="#ff2a3a" fill-opacity=".08"/>
+              <g stroke="rgba(255,243,234,.1)" stroke-width=".6" id="spokes"></g>
+            </g>
+            <text class="nlbl" id="north">N</text>
+            <g id="labels"><text class="lbl">AHEAD</text><text class="lbl">RIGHT</text><text class="lbl back">BEHIND</text><text class="lbl">LEFT</text></g>
             <g id="fx"></g>
-            <g class="head">
+            <g id="head">
               <circle r="12.5" fill="#2a1418" stroke="rgba(255,243,234,.45)" stroke-width="1"/>
               <path d="M-4 -11.8 L0 -18.5 L4 -11.8 Z" fill="rgba(255,243,234,.6)"/>
               <ellipse cx="-13" cy="0" rx="2.3" ry="4" fill="rgba(255,243,234,.45)"/>
               <ellipse cx="13" cy="0" rx="2.3" ry="4" fill="rgba(255,243,234,.45)"/>
             </g>
+            <path id="you" d="M0 -93 l-5 -7.5h10z" fill="url(#rim)" style="filter:drop-shadow(0 0 3px #ff3d7f)"/>
           </svg>
         </div>
       </div>
-      <div id="readout"><div class="main">Pick a sound, tap a direction</div><div class="sub">Top of the dial is where the wearer faces · swipe for more</div></div>
+      <div id="readout"><div class="main">Pick a sound, tap where it is</div><div class="sub">The dial is the room from above: the head turns as the wearer does · swipe for more</div></div>
       <div class="row">
         <button class="btn" id="spk" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>Phone</button>
         <button class="btn" id="snap"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/></svg>Snap 45°</button>
@@ -152,9 +169,9 @@ nav #bar{position:absolute;z-index:0;top:3px;bottom:3px;left:3px;width:calc((100
       <div class="stick"><button class="btn" id="stopAll" style="width:100%"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>Stop everything</button></div>
     </section>
 
-    <!-- 3. Ambience: sounds that go on, as switches -->
+    <!-- 3. Ambience: sounds that go on, as switches, shown on the display only -->
     <section class="page" id="amb">
-      <label class="opt" for="ambShow"><span class="t"><b>Show on the display</b>All around the edge, for as long as it plays</span><input type="checkbox" class="sw" id="ambShow" role="switch"></label>
+      <p class="hint">Visuals only: each one circles the display's edge while it's on. Nothing plays on this phone (to hear one, use Sounds).</p>
       <div class="ambs" id="ambList"></div>
       <div class="stick"><button class="btn" id="ambOff" style="width:100%"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>All off</button></div>
     </section>
@@ -168,6 +185,7 @@ import { createSfx } from '/sfx.js';
 
 const $ = (id) => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 const load = (k, d) => { try { const v = localStorage.getItem('syn.remote.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem('syn.remote.' + k, JSON.stringify(v)); } catch {} };
 const badge = (s, cls = '') => `<span class="badge ${cls}" style="--c:${s.color};--k:${s.core}">${iconSvg(s.icon)}</span>`;
@@ -181,7 +199,7 @@ const pending = new Map();   // cid -> send time, to show the round trip
 let sfx = null;
 const audio = () => { if (!sfx) sfx = createSfx(); sfx.unlock(); return sfx; };
 addEventListener('pointerdown', () => audio(), { capture: true, once: true });
-window.__remote = { get sfx() { return sfx; } };   // handy in the console: __remote.sfx.playing()
+window.__remote = { get sfx() { return sfx; }, get wearer() { return wearer; }, get me() { return me; }, mine: () => mine() };   // console: __remote.wearer
 
 // ================= screens =================
 const tabs = [...$('tabs').querySelectorAll('button')];
@@ -197,6 +215,7 @@ const hub = connect('remote', {
   onState: (s) => setStatus(s === 'open' ? (displays ? 'ok' : 'warn') : s === 'connecting' ? '' : 'bad',
                             s === 'open' ? displayText() : s === 'connecting' ? 'connecting…' : 'reconnecting…'),
   onMessage: (m) => {
+    if (m.type === 'pose') seePose(m);
     if (m.type === 'status') { displays = m.displays; setStatus(displays ? 'ok' : 'warn', displayText()); }
     if (m.type === 'alert' && m.cid && pending.has(m.cid)) {
       const ms = Math.round(performance.now() - pending.get(m.cid)); pending.delete(m.cid);
@@ -229,33 +248,149 @@ function drawGroups() {
   }
 }
 drawGroups();
-for (let i = 0; i < 8; i++) {
-  const a = i * Math.PI / 4, l = document.createElementNS(NS, 'line');
-  l.setAttribute('x1', 18 * Math.sin(a)); l.setAttribute('y1', -18 * Math.cos(a));
-  l.setAttribute('x2', 96 * Math.sin(a)); l.setAttribute('y2', -96 * Math.cos(a));
-  $('spokes').append(l);
+const line = (parent, a, r1, r2, attrs = {}) => {
+  const l = document.createElementNS(NS, 'line'), s = Math.sin(a * D2R), c = Math.cos(a * D2R);
+  l.setAttribute('x1', r1 * s); l.setAttribute('y1', -r1 * c); l.setAttribute('x2', r2 * s); l.setAttribute('y2', -r2 * c);
+  for (const k in attrs) l.setAttribute(k, attrs[k]);
+  parent.append(l);
+};
+for (let a = 0; a < 360; a += 45) line($('spokes'), a, 18, 96);                                   // the wearer's 8 directions
+for (let a = 0; a < 360; a += 15) line($('world'), a, a % 90 ? 92.5 : 89, 95.5, { 'stroke-width': a % 90 ? .6 : 1.1 });   // the room's
+
+// ================= who faces where =================
+// Everything on the dial is in the wearer's frame: the display's heading 0 is where it started. The display
+// sends which way it faces now (heading) and, if it has a compass, where heading 0 is (north). The dial's top:
+//  - Turn with me off: where the wearer started. Their head turns in the middle as they turn.
+//  - Turn with me on: the way this phone faces, from its compass lined up with the display's, or lined up by
+//    hand with Align (point this phone the way the wearer faces and tap). Then you tap where a sound is around
+//    you, as you see it, and the display gets it relative to where the wearer faces.
+const wearer = { heading: 0, north: null, fov: 60, mode: null, at: 0, id: null };
+const me = { rel: null, abs: null, at: 0 };            // this phone's facing: from its gyro (rel) and compass (abs)
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const askMotion = typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function';
+let follow = load('follow', matchMedia('(pointer: coarse)').matches && !askMotion), align = null, motionAsked = false;
+
+function seePose(m) {
+  const now = performance.now();
+  if (wearer.id && m.id !== wearer.id && now - wearer.at < 3000) return;   // two displays: stay with the one already followed
+  Object.assign(wearer, { heading: m.heading ?? 0, north: m.north ?? null, fov: m.fov || 60, mode: m.mode, at: now, id: m.id });
 }
 
+// Which way this phone faces, held like a map or upright: the top edge and the back camera both point
+// the way you face, so their sum works at any tilt. Clockwise degrees from the sensor's 0 (north, when absolute).
+function facing(e) {
+  const a = e.alpha * D2R, b = e.beta * D2R, g = (e.gamma || 0) * D2R;
+  const x = -Math.sin(a) * Math.cos(b) - Math.cos(a) * Math.sin(g) - Math.sin(a) * Math.sin(b) * Math.cos(g);
+  const y = Math.cos(a) * Math.cos(b) - Math.sin(a) * Math.sin(g) + Math.cos(a) * Math.sin(b) * Math.cos(g);
+  return Math.hypot(x, y) > 0.2 ? Math.atan2(x, y) * R2D : null;
+}
+const ease = (old, v) => old == null ? v : wrap(old + wrap(v - old) * 0.3);
+addEventListener('deviceorientation', (e) => {
+  if (e.alpha == null) return;
+  const f = facing(e); if (f == null) return;
+  me.at = performance.now();
+  if (e.absolute) me.abs = ease(me.abs, f); else me.rel = ease(me.rel, f);
+  if (e.webkitCompassHeading != null && e.webkitCompassAccuracy >= 0) me.abs = ease(me.abs, e.webkitCompassHeading);   // iPhone
+});
+addEventListener('deviceorientationabsolute', (e) => {                // Android
+  if (e.alpha == null) return;
+  const f = facing(e); if (f != null) { me.abs = ease(me.abs, f); me.at = performance.now(); }
+});
+async function motionOK() {                                          // iPhone asks first, and only from a tap
+  if (!askMotion || motionAsked) return true;
+  motionAsked = true;
+  try { return await DeviceOrientationEvent.requestPermission() === 'granted'; } catch { return false; }
+}
+addEventListener('pointerdown', () => { if (follow && askMotion && !motionAsked) motionOK(); }, { capture: true });
+
+// This phone's facing in the wearer's frame, or null if it can't be known.
+function mine() {
+  if (!follow) return null;
+  const base = me.rel ?? me.abs;
+  if (align != null && base != null) return wrap(base + align);
+  if (me.abs != null && wearer.north != null) return wrap(me.abs - wearer.north);
+  return null;
+}
+function setFollow(on) {
+  follow = on; save('follow', on); if (!on) align = null;
+  $('follow').classList.toggle('on', on); $('follow').setAttribute('aria-pressed', on);
+}
+setFollow(follow);
+$('follow').onclick = async () => {
+  if (follow) return setFollow(false);
+  if (!await motionOK()) return note('Motion access was refused, so the dial can’t turn with you. Allow it in the browser’s settings.');
+  setFollow(true);
+};
+$('alignBtn').onclick = async () => {
+  if (!follow) { if (!await motionOK()) return note('Motion access was refused, so the dial can’t turn with you.'); setFollow(true); }
+  setTimeout(() => {                                                  // give a just-allowed sensor a moment
+    const base = me.rel ?? me.abs;
+    if (base == null) return note('This phone isn’t saying which way it faces (no motion sensor?).');
+    align = wrap(wearer.heading - base);
+    note('Lined up: the top of the dial is the way you face. Align again if it drifts.');
+    buzz(12);
+  }, me.at ? 0 : 400);
+};
+const note = (t) => { $('readout').innerHTML = `<div class="sub" style="font-size:13px;color:var(--mut)">${t}</div>`; };
+
+// ---- drawing the dial, every frame ----
+const shown = { up: 0, head: 0 };
+let glance = 0, glanceAt = 0, lastT = 0, textAt = 0;
+const LBL = [0, 90, 180, -90];
+const arcPath = (half) => { const s = Math.sin(half * D2R) * 96, c = -Math.cos(half * D2R) * 96; return `M0 0L${-s} ${c}A96 96 0 0 1 ${s} ${c}Z`; };
+function frame(t) {
+  const dt = Math.min(0.1, (t - lastT) / 1000 || 0), k = 1 - Math.exp(-dt * 10); lastT = t;
+  const my = mine(), live = wearer.at && t - wearer.at < 3500 && wearer.mode;
+  shown.up = wrap(shown.up + wrap((my ?? 0) - shown.up) * k);
+  shown.head = wrap(shown.head + wrap(wearer.heading - shown.head) * k);
+  const rotH = wrap(shown.head - shown.up), g = glanceAt ? glance * Math.exp(-(t - glanceAt) / 260) : 0;
+  $('world').setAttribute('transform', `rotate(${(-shown.up).toFixed(2)})`);
+  $('wearer').setAttribute('transform', `rotate(${rotH.toFixed(2)})`);
+  $('head').setAttribute('transform', `rotate(${(rotH + g).toFixed(2)})`);
+  $('head').classList.toggle('away', !live);
+  $('view').setAttribute('d', arcPath(Math.min(80, (wearer.fov || 60) / 2)));
+  [...$('labels').children].forEach((el, i) => { const a = (rotH + LBL[i]) * D2R; el.setAttribute('x', (77 * Math.sin(a)).toFixed(1)); el.setAttribute('y', (-77 * Math.cos(a)).toFixed(1)); });
+  const n = $('north');
+  n.style.display = wearer.north == null ? 'none' : '';
+  if (wearer.north != null) { const a = (-wearer.north - shown.up) * D2R; n.setAttribute('x', (86 * Math.sin(a)).toFixed(1)); n.setAttribute('y', (-86 * Math.cos(a)).toFixed(1)); }
+  $('you').style.display = my == null ? 'none' : '';
+  if (t - textAt > 300) { textAt = t; $('syncText').textContent = syncText(my, live); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+function syncText(my, live) {
+  if (!live) return !wearer.at ? 'Waiting for the display…' : !wearer.mode ? 'Display on its start screen' : 'Display not sending';
+  if (!follow) return 'Top: where they started';
+  if (!me.at) return askMotion && !motionAsked ? 'Tap Turn with me to allow motion' : 'No motion sensor here';
+  if (my == null) return 'Face their way, tap Align';
+  return align != null ? 'Top: your way (lined up)' : 'Top: your way (compass)';
+}
+
+// ---- tapping: where the sound is, around the wearer ----
 $('dial').addEventListener('pointerdown', (e) => {
-  const r = $('dial').getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width * 200 - 100, y = (e.clientY - r.top) / r.height * 200 - 100;
+  const b = $('dial').getBoundingClientRect();
+  const x = (e.clientX - b.left) / b.width * 200 - 100, y = (e.clientY - b.top) / b.height * 200 - 100;
   if (Math.hypot(x, y) > 100) return;
-  let angle = Math.atan2(x, -y) * 180 / Math.PI;   // 0 = up (ahead), clockwise positive
-  if (snap) angle = Math.round(angle / 45) * 45;
-  fire(current, wrap(angle));
+  const yaw = wrap(shown.up + Math.atan2(x, -y) * R2D);             // the tap, in the wearer's frame
+  let rel = wrap(yaw - wearer.heading);                             // …relative to where they face now
+  if (snap) rel = Math.round(rel / 45) * 45;
+  fire(current, wrap(wearer.heading + rel));
 });
 
 let aimVoice = null;
-function fire(sound, angle) {
-  const s = SOUNDS[sound], cid = Math.random().toString(36).slice(2, 9);
-  last = { sound, angle };
+const whereWord = (rel) => { const w = dirWord(rel); return w === 'behind' ? 'behind them' : w === 'ahead' ? 'ahead of them' : `${w} of them`; };
+function fire(sound, yaw) {
+  const s = SOUNDS[sound], cid = Math.random().toString(36).slice(2, 9), rel = wrap(yaw - wearer.heading), my = mine();
+  last = { sound, yaw };
   pending.set(cid, performance.now());
   const len = audio().length(sound);
-  const sent = hub.send({ type: 'alert', sound, angle, cid, ttl: Math.max(6000, Math.round(len * 1000) + 1500) });
-  if (phone) { aimVoice?.stop(0.15); aimVoice = audio().play(sound, { angle }); }
-  animate(angle, s);
+  const sent = hub.send({ type: 'alert', sound, angle: Math.round(rel * 10) / 10, cid, ttl: Math.max(6000, Math.round(len * 1000) + 1500) });
+  // the phone plays it from where it is around you (when the dial turns with you), else around the wearer
+  if (phone) { aimVoice?.stop(0.15); aimVoice = audio().play(sound, { angle: my != null ? wrap(yaw - my) : rel }); }
+  animate(wrap(yaw - shown.up), s);
+  glance = Math.max(-25, Math.min(25, rel / 4)); glanceAt = performance.now();
   buzz(15);
-  $('readout').innerHTML = `<div class="main" style="color:${s.color}">${badge(s)}${s.label} · ${dirWord(angle)} (${Math.round(angle)}°)</div>
+  $('readout').innerHTML = `<div class="main" style="color:${s.color}">${badge(s)}${s.label} · ${whereWord(rel)} (${Math.round(rel)}°)</div>
     <div class="sub">${sent ? 'sending…' : 'Not connected to the laptop' + (phone ? ', playing here only' : '') + '. Is server.py running?'}</div>`;
 }
 
@@ -271,9 +406,6 @@ function animate(angle, s) {
   g.innerHTML = `<defs><radialGradient id="${id}" cx=".5" cy="1.1" r="1"><stop offset="0" stop-color="${s.core}"/><stop offset=".65" stop-color="${color}"/></radialGradient></defs>`
     + `<circle r="9" fill="url(#${id})" style="filter:drop-shadow(0 0 5px ${color})"/>`
     + `<g transform="translate(-6.5 -6.5) scale(.5417)" color="rgba(14,4,8,.86)">${iconSvg(s.icon).replace(/<\/?svg[^>]*>/g, '')}</g>`;
-  const head = document.querySelector('.head');
-  head.style.transform = `rotate(${Math.max(-25, Math.min(25, angle / 4))}deg)`;
-  setTimeout(() => head.style.transform = '', 500);
 }
 
 const buzz = (ms) => navigator.vibrate?.(ms);   // Android only; iPhone browsers ignore it
@@ -281,7 +413,7 @@ const setPhone = (on) => { phone = on; save('phone', on); $('spk').classList.tog
 setPhone(phone);
 $('spk').onclick = () => setPhone(!phone);
 $('snap').onclick = () => { snap = !snap; $('snap').classList.toggle('on', snap); };
-$('again').onclick = () => last && fire(last.sound, last.angle);
+$('again').onclick = () => last && fire(last.sound, last.yaw);   // the same place in the room
 $('clear').onclick = () => {
   hub.send({ type: 'clear' }); aimVoice?.stop(); buzz(10);
   $('readout').innerHTML = '<div class="main">Cleared</div><div class="sub">Every sound cleared from the display</div>';
@@ -313,16 +445,10 @@ function boardStop(key, cut = true) {
   const p = boardPlaying.get(key); if (!p) return;
   if (cut) p.v.stop(); clearTimeout(p.timer); p.b.classList.remove('playing'); boardPlaying.delete(key);
 }
-$('stopAll').onclick = () => { for (const k of [...boardPlaying.keys()]) boardStop(k); sfx?.stopAll(); for (const k of [...ambOn.keys()]) ambSet(k, false); aimVoice = null; };
+$('stopAll').onclick = () => { for (const k of [...boardPlaying.keys()]) boardStop(k); sfx?.stopAll(); aimVoice = null; };
 
-// ================= 3. Ambience: toggles =================
-const ambOn = new Map();          // key -> loop voice
-let ambShow = load('ambShow', true);
-$('ambShow').checked = ambShow;
-$('ambShow').onchange = (e) => {
-  ambShow = e.target.checked; save('ambShow', ambShow);
-  for (const k of ambOn.keys()) ambShow ? showAmb(k, true) : hub.send({ type: 'clear', sound: k });
-};
+// ================= 3. Ambience: toggles, shown on the display only =================
+const ambOn = new Set();
 const DESC = { rain: 'steady rain, drops close by', stream: 'a babbling brook', ocean: 'waves on a shore', wind: 'gusts rising and falling', bird: 'two birds singing',
   crickets: 'a summer night', crackle: 'a fire', ambient: 'a busy room, people talking', music: 'a little groove', kids: 'children playing', typing: 'someone at a keyboard',
   clock: 'tick… tock…', washer: 'the drum turning', vacuum: 'a vacuum cleaner', snore: 'someone asleep', thunder: 'a storm, thunder now and then' };
@@ -336,15 +462,15 @@ for (const [key, s] of Object.entries(SOUNDS)) {
 }
 function ambSet(key, on) {
   const row = $('ambList').querySelector(`[data-k="${key}"]`);
-  if (on && !ambOn.has(key)) { ambOn.set(key, audio().loop(key)); if (ambShow) showAmb(key, true); buzz(8); }
-  if (!on && ambOn.has(key)) { ambOn.get(key).stop(0.6); ambOn.delete(key); if (ambShow) hub.send({ type: 'clear', sound: key }); }
+  if (on && !ambOn.has(key)) { ambOn.add(key); showAmb(key, true); buzz(8); }
+  if (!on && ambOn.has(key)) { ambOn.delete(key); hub.send({ type: 'clear', sound: key }); }
   row.classList.toggle('on', on); row.querySelector('.sw').checked = on;
 }
-// An ambience on the display: heard all around (no direction), refreshed while it plays, cleared when it stops.
+// An ambience on the display: all around the edge (no direction), kept alive while it's on, cleared when it's off.
 function showAmb(key, first) { hub.send({ type: 'alert', sound: key, angle: null, ttl: 12000, hold: !first }); }
-setInterval(() => { if (ambShow) for (const k of ambOn.keys()) showAmb(k, false); }, 8000);
-$('ambOff').onclick = () => { for (const k of [...ambOn.keys()]) ambSet(k, false); };
-addEventListener('pagehide', () => { for (const k of ambOn.keys()) hub.send({ type: 'clear', sound: k }); });
+setInterval(() => { for (const k of ambOn) showAmb(k, false); }, 8000);
+$('ambOff').onclick = () => { for (const k of [...ambOn]) ambSet(k, false); };
+addEventListener('pagehide', () => { for (const k of ambOn) hub.send({ type: 'clear', sound: k }); });
 </script>
 </body>
 </html>

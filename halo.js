@@ -3,13 +3,13 @@
 //
 // The edge is a ring around you:
 //
-//                 top = behind you
+//      top = in front of you (a sound you can see sits right above it)
 //        ┌──────────────────────────────┐
 //   left │                              │ right
 //        └──────────────────────────────┘
-//      bottom = in front of you (a sound you can see sits right below it)
+//                bottom = behind you
 //
-// The corners are the diagonals, so a sound ahead-right lives in the bottom-right corner.
+// The corners are the diagonals, so a sound ahead-right lives in the top-right corner.
 //
 // How a sound looks comes from its `form` in common.js:
 //   size   0–1  loudness → how tall and wide the wave is (an alert's `level` overrides it)
@@ -120,7 +120,8 @@ function hits(cycle, at, decay, base = 0.45, amp = 0.75) {
 }
 
 // The screen edge as a loop, measured in px along the edge.
-// u = 0 is the bottom centre, positive u runs right and up the right side, ±half is the top centre.
+// u = 0 is the top centre (in front), positive u runs right and down the right side, ±half is the bottom
+// centre (behind). It's laid out bottom-first below and mirrored top-to-bottom at the end of at().
 // Distances are measured along a rounded-corner path so the direction waves grow in turns smoothly
 // round each corner (towards the corner's centre, so tall waves never fold over themselves), but every
 // point is pushed out onto the real screen edge, so waves still rise from the very corner of the screen.
@@ -129,9 +130,9 @@ class Rim {
   constructor(W, H, R) {
     const a = W / 2 - R, q = R * Math.PI / 2, c = H - 2 * R;
     Object.assign(this, { W, H, R, a, ends: [a, a + q, a + q + c, a + 2 * q + c], half: 2 * a + 2 * q + c });
-    this.corner = a + q / 2;          // bottom-right corner (ahead-right)
+    this.corner = a + q / 2;          // top-right corner (ahead-right)
     this.side = a + q + c / 2;        // middle of the right edge (right)
-    this.back = a + 1.5 * q + c;      // top-right corner (behind-right)
+    this.back = a + 1.5 * q + c;      // bottom-right corner (behind-right)
   }
   wrapU(u) { const L = 2 * this.half; return ((u + this.half) % L + L) % L - this.half; }
 
@@ -147,11 +148,12 @@ class Rim {
     else if (u <= ends[3]) arc(W - R, R, -(u - ends[2]) / R);
     else { p.x = W - R - (u - ends[3]); p.y = 0; p.nx = 0; p.ny = 1; }
     if (flip) { p.x = W - p.x; p.nx = -p.nx; }
+    p.y = H - p.y; p.ny = -p.ny;      // in front at the top, behind at the bottom
     return p;
   }
 
   // Direction (degrees, 0 = where you look, + = right) → place on the edge.
-  // Inside the field of view it sits under the sound, so it lines up with what you see;
+  // Inside the field of view it sits right above the sound, so it lines up with what you see;
   // outside, it runs through the corner, up the side and round to the top as the sound goes behind.
   toU(rel, fov) {
     const r = Math.abs(rel), h = clamp(fov / 2, 10, 80), { W, a } = this;

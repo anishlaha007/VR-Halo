@@ -26,6 +26,10 @@ body.mode-preview #world{display:block}
 #topbar{position:absolute;z-index:3;top:calc(env(safe-area-inset-top) + 12px);left:calc(env(safe-area-inset-left) + 12px);right:calc(env(safe-area-inset-right) + 12px);display:flex;gap:8px;align-items:center;pointer-events:none}
 #topbar>*{pointer-events:auto}
 #topbar .sp{flex:1}
+/* running, sounds in front come in along the top edge, so the controls move to the bottom (behind you) */
+body.running #topbar{top:auto;bottom:calc(env(safe-area-inset-bottom) + 12px)}
+body.running #settings{top:auto;bottom:calc(env(safe-area-inset-bottom) + 64px)}
+body.running #toast{top:auto;bottom:calc(env(safe-area-inset-bottom) + 64px)}
 #conn{display:inline-flex;align-items:center;gap:9px;height:32px;padding:0 14px 0 12px;border-radius:99px;font-size:12px;letter-spacing:.02em;color:var(--mut)}
 #conn i{width:7px;height:7px;border-radius:50%;background:var(--dim);flex:none}
 #conn.ok i{background:var(--ok);animation:alive 2.4s ease-out infinite}
@@ -186,8 +190,8 @@ body.running #start{display:none}
         <input type="checkbox" class="sw" id="listenSw" role="switch">
       </label>
       <div class="read">
-        <div class="ring" aria-hidden="true"><i class="t">behind</i><i class="l">left</i><i class="r">right</i><i class="b">in front</i></div>
-        <div>The edge of the view is a ring around you. Hold the phone the way you're facing before you start: sounds are placed relative to where you face when they arrive.</div>
+        <div class="ring" aria-hidden="true"><i class="t">in front</i><i class="l">left</i><i class="r">right</i><i class="b">behind</i></div>
+        <div>The edge of the view is a ring around you: in front along the top, behind along the bottom. Hold the phone the way you're facing before you start: sounds are placed relative to where you face when they arrive.</div>
       </div>
       <div class="heat">
         <i style="background:linear-gradient(90deg,#ff2e4d,#ff6a1a,#ffb21f)"></i><div><b>Warm, look now.</b> Red is danger: alarms, sirens, breaking glass. Orange to gold, traffic.</div>
@@ -222,6 +226,8 @@ const S = {
   domOverlay: true,        // false on Quest (no page over AR), so the halo is drawn onto a 3D frame instead
   listen: load('listen', 0) === 1,   // hear sounds with this device's microphone (listen.js): a test mode, off by default
   sens: load('sens', 1),
+  north: null,             // compass bearing of heading 0, when this device has a compass (so the remote can line up with it)
+  id: Math.random().toString(36).slice(2, 8),
 };
 const halo = new Halo($('halo'));
 window.__sar = S; S.halo = halo;   // handy in the console: __sar.halo.voices, __sar.heading
@@ -300,7 +306,7 @@ for (const [k, val] of Object.entries(SENS)) {
 }
 
 function begin(mode) {
-  S.mode = mode;
+  S.mode = mode; S.north = null; nx = ny = 0;   // each mode has its own heading 0, so its compass fix starts again
   document.body.className = 'running mode-' + mode; $('settings').dataset.mode = mode;
   halo.clear();                              // the start screen's sounds sink away
   $('fov').value = mode === 'preview' ? S.prevFov : S.camFov; $('fovVal').textContent = $('fov').value;
@@ -508,6 +514,37 @@ function onOrient(e) {
     S.heading = Math.atan2(S.hx, S.hy) * R2D;
   }
   S.pitch += (Math.asin(Math.max(-1, Math.min(1, vz))) * R2D - S.pitch) * 0.35;
+  if (e.webkitCompassHeading != null && e.webkitCompassAccuracy >= 0) seeNorth(e.webkitCompassHeading);   // iPhone
+}
+
+// ---- compass: which real direction is heading 0, so the remote can turn its dial to match ----
+// Headings here are relative to wherever the device started (or where AR started). With a compass we also
+// know where that is in the room: north = compass bearing − heading, averaged slowly (compasses wobble
+// indoors). Android reports it on 'deviceorientationabsolute'; iPhone as webkitCompassHeading (above).
+let nx = 0, ny = 0;
+function seeNorth(bearing) {
+  const d = wrap(bearing - S.heading) * D2R;
+  if (!nx && !ny) { nx = Math.sin(d); ny = Math.cos(d); } else { nx += (Math.sin(d) - nx) * 0.05; ny += (Math.cos(d) - ny) * 0.05; }
+  S.north = Math.atan2(nx, ny) * R2D;
+}
+function onAbsolute(e) {
+  if (e.alpha == null || !(S.mode === 'camera' || S.mode === 'ar')) return;
+  const a = e.alpha * D2R, b = e.beta * D2R, g = (e.gamma || 0) * D2R;
+  const vx = -Math.cos(a) * Math.sin(g) - Math.sin(a) * Math.sin(b) * Math.cos(g);   // where the back camera looks, as in onOrient
+  const vy = -Math.sin(a) * Math.sin(g) + Math.cos(a) * Math.sin(b) * Math.cos(g);
+  if (Math.hypot(vx, vy) > 0.25) seeNorth(Math.atan2(vx, vy) * R2D);
+}
+addEventListener('deviceorientationabsolute', onAbsolute);
+
+// ---- tell the remote which way this display faces (a few times a second while it turns) ----
+let poseAt = 0, posed = null;
+function sharePose(now, fov) {
+  const p = { heading: Math.round(S.heading * 2) / 2, north: S.north == null ? null : Math.round(S.north), fov: Math.round(fov), mode: S.mode };
+  const moved = !posed || p.mode !== posed.mode || Math.abs(wrap(p.heading - posed.heading)) >= 1 || p.fov !== posed.fov
+    || (p.north == null) !== (posed.north == null) || Math.abs(wrap((p.north || 0) - (posed.north || 0))) >= 2;
+  if (now - poseAt < (moved ? 100 : 1000)) return;
+  poseAt = now; posed = p;
+  hub.send({ type: 'pose', id: S.id, ...p });
 }
 
 // ================= laptop preview (and drag fallback in camera view) =================
@@ -545,11 +582,12 @@ function startDomLoop() { if (!domLooping) { domLooping = true; requestAnimation
 function domLoop() {
   if (S.mode === 'ar') { domLooping = false; return; }
   const now = performance.now();
-  if (!S.mode) halo.draw(now, 0, 64);
+  if (!S.mode) { halo.draw(now, 0, 64); sharePose(now, 64); }
   else {
     const fov = screenFov();
     if (S.mode === 'preview') drawWorld(innerWidth, innerHeight, (innerWidth / 2) / Math.tan(fov / 2 * D2R));
     halo.draw(now, S.heading, fov, flatProject(fov));
+    sharePose(now, fov);
     if (!$('settings').hidden) {
       const n = halo.voices.length;
       $('diag').textContent = `heading ${S.heading.toFixed(0)}° · fov ${fov.toFixed(0)}° · ${n} sound${n === 1 ? '' : 's'}${S.gotSensor || S.mode === 'preview' ? '' : ' · no sensor'}`;
@@ -593,7 +631,7 @@ function drawWorld(W, H, f) {
 
 // ================= scenario + demo (preview) =================
 // The "Scenario one: conversation" sketch: someone talks right in front of you, then you slowly turn away.
-// Their voice slides along the bottom edge, into the corner, then up the side once they're off-screen.
+// Their voice slides along the top edge, into the corner, then down the side once they're off-screen.
 let sceneAnim = 0;
 function conversation() {
   if (S.mode !== 'preview') return toast('The scenario plays in Preview, where it can turn the view for you.');
@@ -718,9 +756,10 @@ function arFrame(time, frame) {
     if (Math.hypot(f.x, f.z) > 0.2) S.heading = Math.atan2(f.x, -f.z) * R2D;   // looking straight up or down: keep the last one
     const now = performance.now();
     for (const v of halo.voices) if (v.yaw != null && !v.world) v.world = anchor(v.yaw);   // arrived before the first pose
-    const project = arProject(pose.views[0]);
-    if (S.domOverlay) halo.draw(now, S.heading, 2 * Math.atan(1 / pose.views[0].projectionMatrix[0]) * R2D, project);
-    else { halo.draw(now, S.heading, QUEST_FOV, project); xr.tex.needsUpdate = true; }
+    const project = arProject(pose.views[0]), fov = S.domOverlay ? 2 * Math.atan(1 / pose.views[0].projectionMatrix[0]) * R2D : QUEST_FOV;
+    halo.draw(now, S.heading, fov, project);
+    if (!S.domOverlay) xr.tex.needsUpdate = true;
+    sharePose(now, fov);
   }
   xr.renderer.render(xr.scene, xr.camera);
 }

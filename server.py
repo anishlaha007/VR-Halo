@@ -44,6 +44,7 @@ for ext, kind in TYPES.items():
     except (ImportError, AttributeError):
         pass
 CLIENTS: dict = {}            # websocket -> role ("remote", "display", "mic", ...)
+LAST_POSE: dict = {}          # the latest "which way I face" from a display, so a remote that opens gets it at once
 IDS = itertools.count(1)
 LAST_MIC_ALERT = 0.0
 MIC_COOLDOWN_S = 1.5          # stops one clap/siren from firing ten alerts
@@ -109,10 +110,10 @@ def counts() -> dict:
             "remotes": roles.count("remote"), "mics": roles.count("mic")}
 
 
-async def broadcast(msg: dict, exclude=None) -> None:
+async def broadcast(msg: dict, exclude=None, role=None) -> None:
     data = json.dumps(msg)
     for c in list(CLIENTS):
-        if c is exclude or c.closed:
+        if c is exclude or c.closed or (role and CLIENTS.get(c) != role):
             continue
         try:
             if isinstance(c, SSEClient):
@@ -157,6 +158,16 @@ async def handle(data: dict, role: str) -> None:
         sound = str(data.get("sound") or "")[:32]
         print(f"  clear {sound or 'all'}")
         await broadcast({"type": "clear", "sound": sound} if sound else {"type": "clear"})
+    elif kind == "pose" and role == "display":   # which way a display faces: only the remotes need it
+        pose = {"type": "pose", "id": str(data.get("id", ""))[:16], "mode": str(data["mode"])[:12] if data.get("mode") else None}
+        for k in ("heading", "north", "fov"):
+            try:
+                pose[k] = None if data.get(k) is None else round(float(data[k]), 1)
+            except (TypeError, ValueError):
+                pose[k] = None
+        LAST_POSE.clear()
+        LAST_POSE.update(pose, at=time.time())
+        await broadcast(pose, role="remote")
     elif kind == "sound":             # your existing stereo-mic detector page
         if data.get("zone") == "behind" and time.time() - LAST_MIC_ALERT > MIC_COOLDOWN_S:
             LAST_MIC_ALERT = time.time()
@@ -172,6 +183,8 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     CLIENTS[ws] = role
     print(f"+ {role} connected ({request.remote})")
     await broadcast(counts())
+    if role == "remote" and LAST_POSE and time.time() - LAST_POSE["at"] < 10:
+        await ws.send_str(json.dumps({k: v for k, v in LAST_POSE.items() if k != "at"}))
     try:
         async for msg in ws:
             if msg.type != WSMsgType.TEXT:
@@ -199,6 +212,8 @@ async def sse_handler(request: web.Request) -> web.StreamResponse:
     CLIENTS[client] = role
     print(f"+ {role} connected ({request.remote}, fallback)")
     await broadcast(counts())
+    if role == "remote" and LAST_POSE and time.time() - LAST_POSE["at"] < 10:
+        client.queue.put_nowait(json.dumps({k: v for k, v in LAST_POSE.items() if k != "at"}))
     try:
         await resp.write(b": hello\n\n")
         while True:

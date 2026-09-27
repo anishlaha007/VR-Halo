@@ -37,7 +37,7 @@ It prints the links to open. The page at `http://<laptop-ip>:8000/` lists them t
 
 1. Open `http://localhost:8000/display` → **Preview**.
 2. Open `http://localhost:8000/remote` in a second window (or on your phone).
-3. Pick a sound, then tap the dial. A wave grows out of the edge of the display on that side, and the remote plays the sound. Tap the bottom of the dial and it appears on the top edge (behind you), with a flash of light running round the edge. Drag or use ← → to turn toward it: the wave slides round to the bottom, and a beacon appears where the sound came from.
+3. Pick a sound, then tap the dial. A wave grows out of the edge of the display on that side, and the remote plays the sound. Tap behind the wearer and it appears on the bottom edge, with a flash of light running round the edge. Drag or use ← → to turn toward it: the wave slides round to the top, and a beacon appears where the sound came from. The head in the middle of the remote's dial turns as you do.
 4. Keyboard in the preview: **T** = test sound, **1–9** and **0** = the first ten sounds, **C** = clear. Settings has a button for every sound.
 5. Open `http://localhost:8000/display?demo` to watch it run through the conversation scenario and a few other sounds on its own.
 
@@ -45,9 +45,16 @@ It prints the links to open. The page at `http://<laptop-ip>:8000/` lists them t
 
 Swipe left and right, or tap the tabs at the top.
 
-- **Aim:** pick a group (Danger, Traffic, People, Home, Nature, Low & music), pick a sound, and tap where it comes from. The display shows it there, and this phone plays it, panned left or right (on headphones) and muffled when it's behind. **Phone** turns the phone's sound off and on. **Snap 45°**, **Again** and **Clear** work as before.
+- **Aim:** pick a group (Danger, Traffic, People, Home, Nature, Low & music), pick a sound, and tap where it is. The display shows it there, and this phone plays it, panned left or right (on headphones) and muffled when it's behind. **Phone** turns the phone's sound off and on. **Snap 45°** snaps to the wearer's 8 directions. **Again** repeats the last sound from the same place in the room. **Clear** clears the display.
 - **Sounds:** every sound, to play on the phone only. Nothing is sent to the display. Tap again to stop.
-- **Ambience:** sounds that go on (rain, a stream, waves, wind, birds, crickets, a fire, a crowd, music, children playing, typing, a clock, a washing machine, a vacuum, snoring, a storm), each a switch. Mix as many as you like. With **Show on the display** on, each one circles the display's edge while it plays and goes away when you switch it off.
+- **Ambience:** sounds that go on (rain, a stream, waves, wind, birds, crickets, a fire, a crowd, music, children playing, typing, a clock, a washing machine, a vacuum, snoring, a storm), each a switch. Visuals only: each one circles the display's edge while it's on, and nothing plays on the phone. Mix as many as you like.
+
+### The dial is the room, seen from above
+
+The wearer is in the middle, and their head turns as they turn (the display sends which way it faces, a few times a second). The light wedge is what they can see, the red wedge is behind them, and **AHEAD / RIGHT / BEHIND / LEFT** travel round with them. So you never have to work out where their "ahead" is: tap where the sound is in the room, and the display gets it relative to where the wearer faces at that moment.
+
+- **Turn with me** (on by default on Android, one tap to allow motion on iPhone) turns the dial with the remote phone too, so the top of the dial is always the way *you* face. Then you just tap where the sound is around you, as you see it, even if you and the wearer face different ways. When both phones have a compass (most do; the display needs camera view or AR), they line up by themselves, and an **N** shows north. Otherwise, or if the compass is off (they wobble indoors, near metal), point the remote the way the wearer faces and tap **Align**. Align again if it drifts.
+- **Turn with me off** (a laptop): the top of the dial is the way the wearer faced when they started, and only their head turns.
 
 The phone's sounds are made on the phone from a recipe each (in `sfx.js`), not recordings. They're sketches of the real thing. Talking, your name and shouting use the phone's own text-to-speech voice. On recent iPhones they play even with the ring switch on silent.
 
@@ -92,7 +99,7 @@ curl -X POST http://localhost:8000/send -d '{"type":"clear","sound":"rain"}'   #
 
 From Python: `requests.post("http://localhost:8000/alert", json={"sound": "name", "angle": -120})`
 
-The stereo-mic page (`/mic`) already connects to the hub. Any "behind" detection becomes a violet wave on the top edge (behind you), limited to one every 1.5 s. Repeats of the same sound from about the same direction keep one wave alive instead of stacking new ones.
+The stereo-mic page (`/mic`) already connects to the hub. Any "behind" detection becomes a violet wave on the bottom edge (behind you), limited to one every 1.5 s. Repeats of the same sound from about the same direction keep one wave alive instead of stacking new ones.
 
 ## 6. Listening: the display recognises sounds itself
 
@@ -111,16 +118,18 @@ The display can hear sounds with its own microphone and show them with no remote
 Each sound is a wave that grows out of the edge of the view, only on the stretch of edge that faces the sound. The edge is a ring around you:
 
 ```
-              top edge = behind you
+            top edge = in front of you
      ┌─────────────────────────────────┐
 left │                                 │ right
      └─────────────────────────────────┘
-        bottom edge = in front of you
+             bottom edge = behind you
 ```
 
-- **In view:** the wave sits on the bottom edge, right under the sound, and slides along it as you turn.
-- **Leaving the view:** it slides into the bottom corner, then flattens against the side edge.
-- **Behind you:** it climbs to the top corners and the top edge. Hazards and anything behind you also send a flash of light running round the whole edge.
+- **In view:** the wave sits on the top edge, right above the sound, and slides along it as you turn.
+- **Leaving the view:** it slides into the top corner, then flattens against the side edge.
+- **Behind you:** it moves down to the bottom corners and the bottom edge. Hazards and anything behind you also send a flash of light running round the whole edge.
+
+While the display is running, its buttons sit along the bottom (behind you), so nothing covers the sounds in front.
 
 A sound's shape says what kind of sound it is. Each sound's `form` in `common.js` sets it:
 
@@ -160,7 +169,7 @@ Each sound has a `color` (its body) and a `core` (the hot colour at its heart), 
 - **Sounds, colours, shapes, icons:** `SOUNDS` in `common.js`, and the icon drawings in `icons.js`. Open `/forms` to see every sound side by side, in front, in the corner, off-screen and behind, and ▶ to hear it.
 - **How a sound sounds on the remote:** its recipe in `R` in `sfx.js`. `tone`, `hiss` (filtered noise), `strike` (bells, glass, metal), `voice` (a vowel-shaped voice), `drop` (water) and `every` (repeats, for loops) are the building blocks.
 - **How waves are drawn and move:** `halo.js`. `Halo.step()` sets size and placement, `Halo.h()` is the wave's outline, `dome()` is the direction marker, and `body()`, `grain()`, `badge()` (the icon), `speech()`, `omni()`, `sweep()` and `beacon()` draw each part.
-- **Where a direction lands on the edge:** `Rim.toU()` in `halo.js`.
+- **Where a direction lands on the edge:** `Rim.toU()` in `halo.js`. The last line of `Rim.at()` mirrors the ring so in front is at the top; remove it to put in front at the bottom.
 - **Colours, backdrop, wordmark:** `brand.css`. **Start screen, buttons, settings:** the CSS at the top of `display.html`.
 - **Timing:** `ttl` (default 6000 ms) per alert. `FADE` at the top of `halo.js`.
 
@@ -171,6 +180,7 @@ Each sound has a `color` (its body) and a `core` (the hot colour at its heart), 
 - **Nothing is heard:** open settings and look at the live guesses. If the level stays near the bottom, the browser is getting silence (another app may have the microphone). If the sound shows but under its threshold, try **high** sensitivity.
 
 - **Remote says "no display":** the display page isn't open, or it's on a different network.
+- **The remote's dial doesn't line up with the room:** tap **Align** while pointing the remote the way the wearer faces. If the head doesn't turn at all, the display is on its start screen (start a mode) or its phone has no motion sensor (in the laptop preview, drag to turn).
 - **Remote says "reconnecting":** the Wi-Fi is blocking device-to-device traffic. Use a hotspot or the tunnel.
 - **Start AR is greyed out:** the page isn't on https/localhost, or (on Android) you need Google Play Services for AR. Use camera view instead.
 - **Waves reach the corner before the sound leaves the screen, or after (or the beacon sits beside the thing, not on it):** open settings on the display and adjust the field-of-view slider. The phone remembers the setting for each camera.
